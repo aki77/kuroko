@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kuroko</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="panel">
+      <header class="titlebar">
+        <div class="title">
+          <span class="dot" id="statusDot"></span>
+          <span>LIVE ASSISTANT</span>
+        </div>
+        <div class="titlebar-actions">
+          <button id="refreshBtn" title="今すぐ提案 (⌘⇧K)">↻</button>
+        </div>
+      </header>
+
+      <div class="status-line" id="statusLine">待機中…</div>
+
+      <main class="content" id="content">
+        <div class="empty" id="empty">
+          会議が始まると、ここに話題の要約・聞くべきこと・背景知識が表示されます。
+        </div>
+
+        <section class="block topic-block" id="topicBlock" hidden>
+          <h1 id="topic"></h1>
+          <p id="discussion"></p>
+        </section>
+
+        <section class="block" id="questionsBlock" hidden>
+          <h2>聞くべきこと</h2>
+          <ul id="questions"></ul>
+        </section>
+
+        <section class="block" id="webBlock" hidden>
+          <h2>FROM THE WEB</h2>
+          <div id="web"></div>
+        </section>
+      </main>
+
+      <footer class="footer" id="footer"></footer>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>
