@@ -36,4 +36,7 @@ export const config = {
 
   /** claude -p 呼び出しのタイムアウト(ms) */
   claudeTimeoutMs: Number(process.env.KUROKO_CLAUDE_TIMEOUT_MS ?? 60_000),
+
+  /** web検索プロセス(B)のタイムアウト(ms)。検索往復があるためAより長め。 */
+  claudeWebTimeoutMs: Number(process.env.KUROKO_CLAUDE_WEB_TIMEOUT_MS ?? 90_000),
 } as const;

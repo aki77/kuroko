@@ -3,11 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Cue, Suggestion } from "../shared/types";
+import type { Cue, Suggestion, WebNote } from "../shared/types";
 import { config } from "./config";
 
-/** claude -p に渡す構造化出力スキーマ（Suggestion型と一致させる） */
-const SUGGESTION_SCHEMA = {
+/** claude -p に渡す構造化出力スキーマ（A: 要約+questions のみ。WebSearchなしで速い） */
+const SUMMARY_SCHEMA = {
   type: "object",
   properties: {
     topic: { type: "string", description: "今まさに話している話題の短い見出し" },
@@ -17,6 +17,15 @@ const SUGGESTION_SCHEMA = {
       items: { type: "string" },
       description: "次に確認すべき質問・確認漏れ（1〜4個、なければ空配列）",
     },
+  },
+  required: ["topic", "discussion", "questions"],
+  additionalProperties: false,
+} as const;
+
+/** claude -p に渡す構造化出力スキーマ（B: web のみ。WebSearchを使うため遅い） */
+const WEB_SCHEMA = {
+  type: "object",
+  properties: {
     web: {
       type: "array",
       items: {
@@ -31,17 +40,23 @@ const SUGGESTION_SCHEMA = {
       description: "会話に出た用語・技術・固有名詞をWeb検索で補った背景知識（0〜4個）",
     },
   },
-  required: ["topic", "discussion", "questions", "web"],
+  required: ["web"],
   additionalProperties: false,
 } as const;
 
-const SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
+const SUMMARY_SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
 進行中の会議の文字起こしを読み、参加者が会議をうまく進められるよう、会議中に役立つ補足をリアルタイムで返します。
 
-以下の3点を提供してください:
+以下を提供してください:
 1. topic / discussion: 今まさに話している話題と、その議論の簡潔な要約。
 2. questions: 会話の流れから「次に確認すべきこと」「詰め忘れている条件」を挙げる。今すぐ聞く価値のあるものだけ。無理に埋めず、なければ空配列。
-3. web: 会話に登場した専門用語・技術・製品・固有名詞のうち、背景知識があると議論が深まるものをWeb検索で調べて簡潔に補足する。一般常識レベルのものは含めない。0〜4個。
+
+日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
+
+const WEB_SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
+進行中の会議の文字起こしを読み、参加者の議論を深める背景知識をWeb検索で調べて返します。
+
+web: 会話に登場した専門用語・技術・製品・固有名詞のうち、背景知識があると議論が深まるものをWeb検索で調べて簡潔に補足する。一般常識レベルのものは含めない。0〜4個。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 
@@ -57,13 +72,36 @@ interface ClaudeJsonResult {
   result: string;
   duration_ms: number;
   total_cost_usd: number;
-  structured_output?: Suggestion;
+  structured_output?: unknown;
+}
+
+/** claude -p 1回の呼び出しを表すタスク定義。A/Bで差し替え可能な部分だけを引数化する */
+interface ClaudeTask {
+  prompt: string;
+  systemPrompt: string;
+  schema: object;
+  /** 空配列なら --allowedTools を付けない（ツールなし=速い） */
+  allowedTools: string[];
+  /** 将来 A/B 別モデル化の拡張点（今は両方 config.model） */
+  model: string;
+  timeoutMs: number;
+}
+
+interface ClaudeRunResult {
+  structured: unknown;
+  durationMs: number;
+  costUsd: number;
 }
 
 /**
  * 直近の発話と（あれば）前回の提案をClaudeに渡し、新しい提案を生成する。
  * 前回提案を渡すことで、話題が変わっていなければ既存内容を維持し、
  * 変化があった部分だけ更新するよう促す（miyagawa版のUPDATED/unchangedに相当）。
+ *
+ * 内部では性質の違う2プロセスに分割して並行実行する:
+ *   A（速い・ツールなし）: topic + discussion + questions
+ *   B（遅い・WebSearchあり）: web(WebNote[]) のみ
+ * Bが失敗してもAだけで提案を返す（会議中に全滅しないため）。
  */
 export async function generateSuggestion(
   cues: Cue[],
@@ -74,35 +112,76 @@ export async function generateSuggestion(
   const recent = cues.slice(-config.recentCueLimit);
   const transcript = recent.map((c) => `${c.speaker}: ${c.text}`).join("\n");
 
-  const prevSection = previous
-    ? `\n\n【前回の提案】話題が続いているなら維持し、変化があった点だけ更新してください:\n${JSON.stringify(
-        previous,
-        null,
-        2,
-      )}`
-    : "";
+  // previousの一部だけを抜粋してプロンプトに埋め込む（A/Bそれぞれ入力を減らして速くする）。
+  // previousが無ければ抜粋も無し
+  const prevSection = (label: string, data: unknown): string =>
+    previous
+      ? `\n\n【前回の${label}】話題が続いているなら維持し、変化があった点だけ更新してください:\n${JSON.stringify(
+          data,
+          null,
+          2,
+        )}`
+      : "";
+  const prevSummary = previous && {
+    topic: previous.topic,
+    discussion: previous.discussion,
+    questions: previous.questions,
+  };
+  const prevWeb = previous && { web: previous.web };
 
-  const prompt = `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection}`;
+  const baseTask = { model: config.model } as const;
+  const summaryTask: ClaudeTask = {
+    ...baseTask,
+    prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("提案", prevSummary)}`,
+    systemPrompt: SUMMARY_SYSTEM_PROMPT,
+    schema: SUMMARY_SCHEMA,
+    allowedTools: [],
+    timeoutMs: config.claudeTimeoutMs,
+  };
+  const webTask: ClaudeTask = {
+    ...baseTask,
+    prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("補足", prevWeb)}`,
+    systemPrompt: WEB_SYSTEM_PROMPT,
+    schema: WEB_SCHEMA,
+    allowedTools: ["WebSearch"],
+    timeoutMs: config.claudeWebTimeoutMs,
+  };
 
-  const raw = await runClaude(prompt);
-  const parsed = JSON.parse(raw) as ClaudeJsonResult;
+  const [summaryOutcome, webOutcome] = await Promise.allSettled([
+    runClaude(summaryTask),
+    runClaude(webTask),
+  ]);
 
-  if (parsed.is_error) {
-    throw new Error(`claude returned error: ${parsed.result ?? "unknown"}`);
+  // A（要約）が失敗したら提案自体を出せないためthrowする（従来の全体失敗と同じ挙動）
+  if (summaryOutcome.status === "rejected") {
+    throw summaryOutcome.reason;
   }
+  const summary = toSummary(summaryOutcome.value.structured);
+
+  // B（web）が失敗してもAだけで続行する（会議中に全滅しないための方針）。
+  // 空配列・cost/duration 0 のダミー結果にフォールバックし、以降はA/Bを対称に扱う
+  let webResult: ClaudeRunResult;
+  if (webOutcome.status === "fulfilled") {
+    webResult = webOutcome.value;
+  } else {
+    console.warn("web task failed:", webOutcome.reason);
+    webResult = { structured: undefined, durationMs: 0, costUsd: 0 };
+  }
+  const web = toWeb(webResult.structured);
 
   return {
-    suggestion: toSuggestion(parsed.structured_output),
-    durationMs: parsed.duration_ms,
-    costUsd: parsed.total_cost_usd,
+    suggestion: { ...summary, web },
+    durationMs: Math.max(summaryOutcome.value.durationMs, webResult.durationMs),
+    costUsd: summaryOutcome.value.costUsd + webResult.costUsd,
   };
 }
 
 /**
- * 外部プロセス(claude)の出力を信頼しきらず、Suggestionの形に正規化する。
+ * 外部プロセス(claude)の出力を信頼しきらず、要約部分をSuggestionの形に正規化する。
  * CLIのバージョン変化や出力仕様変更で形が崩れても、下流(renderer)が壊れないようにする。
+ * Aは必須のため、raw が無ければ throw する。
  */
-function toSuggestion(raw: unknown): Suggestion {
+function toSummary(raw: unknown): Omit<Suggestion, "web"> {
   if (!raw || typeof raw !== "object") {
     throw new Error("claude returned no structured_output");
   }
@@ -113,16 +192,25 @@ function toSuggestion(raw: unknown): Suggestion {
     questions: Array.isArray(o.questions)
       ? o.questions.filter((q): q is string => typeof q === "string")
       : [],
-    web: Array.isArray(o.web)
-      ? o.web
-          .filter((w): w is Record<string, unknown> => !!w && typeof w === "object")
-          .map((w) => ({
-            title: typeof w.title === "string" ? w.title : "",
-            detail: typeof w.detail === "string" ? w.detail : "",
-          }))
-          .filter((w) => w.title || w.detail)
-      : [],
   };
+}
+
+/**
+ * 外部プロセス(claude)の出力を信頼しきらず、web部分を正規化する。
+ * Bは欠けても致命的でないため、raw が無ければ空配列を返す。
+ */
+function toWeb(raw: unknown): WebNote[] {
+  if (!raw || typeof raw !== "object") return [];
+  const o = raw as Record<string, unknown>;
+  return Array.isArray(o.web)
+    ? o.web
+        .filter((w): w is Record<string, unknown> => !!w && typeof w === "object")
+        .map((w) => ({
+          title: typeof w.title === "string" ? w.title : "",
+          detail: typeof w.detail === "string" ? w.detail : "",
+        }))
+        .filter((w) => w.title || w.detail)
+    : [];
 }
 
 /**
@@ -156,27 +244,29 @@ function resolveClaudeBin(): string {
   return (cachedClaudeBin = "claude");
 }
 
-/** claude -p をサブプロセスで実行し、stdout(JSON文字列)を返す */
-function runClaude(prompt: string): Promise<string> {
+/** claude -p をタスク定義に従いサブプロセスで実行し、構造化出力・所要時間・コストを返す */
+function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
   return new Promise((resolve, reject) => {
     const args = [
       "-p",
-      prompt,
+      task.prompt,
       "--model",
-      config.model,
+      task.model,
       "--output-format",
       "json",
       // user/project/local の設定を全無効化（CLAUDE.md/hooks/MCPの影響排除・警告抑止）
       "--setting-sources",
       "",
-      // FROM THE WEB のためWeb検索だけ許可（他ツールは使わせない）
-      "--allowedTools",
-      "WebSearch",
-      "--append-system-prompt",
-      SYSTEM_PROMPT,
-      "--json-schema",
-      JSON.stringify(SUGGESTION_SCHEMA),
     ];
+    if (task.allowedTools.length > 0) {
+      args.push("--allowedTools", ...task.allowedTools);
+    }
+    args.push(
+      "--append-system-prompt",
+      task.systemPrompt,
+      "--json-schema",
+      JSON.stringify(task.schema),
+    );
 
     const child = spawn(resolveClaudeBin(), args, {
       cwd: config.claudeCwd, // 空ディレクトリ。CLAUDE.md自動探索を回避
@@ -193,8 +283,8 @@ function runClaude(prompt: string): Promise<string> {
 
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      reject(new Error(`claude timed out after ${config.claudeTimeoutMs}ms`));
-    }, config.claudeTimeoutMs);
+      reject(new Error(`claude timed out after ${task.timeoutMs}ms`));
+    }, task.timeoutMs);
 
     child.on("error", (err) => {
       clearTimeout(timer);
@@ -206,7 +296,22 @@ function runClaude(prompt: string): Promise<string> {
         reject(new Error(`claude exited with code ${code}: ${stderr.trim()}`));
         return;
       }
-      resolve(stdout);
+      let parsed: ClaudeJsonResult;
+      try {
+        parsed = JSON.parse(stdout) as ClaudeJsonResult;
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+      if (parsed.is_error) {
+        reject(new Error(`claude returned error: ${parsed.result ?? "unknown"}`));
+        return;
+      }
+      resolve({
+        structured: parsed.structured_output,
+        durationMs: parsed.duration_ms,
+        costUsd: parsed.total_cost_usd,
+      });
     });
   });
 }
