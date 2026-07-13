@@ -1,6 +1,6 @@
 # kuroko
 
-Zoomの文字起こしをリアルタイムに監視し、会議中に「今の話題の要約」「次に聞くべきこと」「Web検索による背景知識」を、画面隅の半透明オーバーレイでさりげなく提案するツール。
+Zoomの文字起こしをリアルタイムに監視し、会議中に「今の話題の要約」「次に話すべきこと」「Web検索による背景知識」を、画面隅の半透明オーバーレイでさりげなく提案するツール。
 
 Cluely / [AI-Giziroku](https://zenn.dev/uguisu_blog/articles/d777bd252bab6b) / miyagawa の live-assistant に着想を得ています。裏側のLLMはサブスク契約の `claude -p`（sonnet）を使います。
 
@@ -9,7 +9,7 @@ Cluely / [AI-Giziroku](https://zenn.dev/uguisu_blog/articles/d777bd252bab6b) / m
 - **画面共有・録画に映らない**オーバーレイ（macOSの `NSWindowSharingNone` / Electron `setContentProtection`）
 - 常に最前面・半透明ガラスUI・全仮想デスクトップで表示
 - 新しい発言が一定数たまるたびに**自動で提案を更新**（手動トリガーも可）
-- `claude -p --json-schema` による構造化出力で、提案を3ブロック（話題/聞くべきこと/FROM THE WEB）に整形
+- `claude -p --json-schema` による構造化出力で、提案を3ブロック（話題/次に話すべきこと/FROM THE WEB）に整形
 - Web検索（`WebSearch`ツール）で会話中の専門用語を補足
 
 ## 前提
@@ -46,6 +46,9 @@ pnpm start
 | `KUROKO_RECENT_LIMIT` | `40` | Claudeに渡す直近発話数 |
 | `KUROKO_DEBOUNCE_MS` | `1500` | 追記検知後のデバウンス |
 | `KUROKO_CLAUDE_TIMEOUT_MS` | `60000` | claude -p のタイムアウト |
+| `KUROKO_MY_NAME` | （なし） | 本人の話者名。設定するとその人の発話には「続けて話すべきこと」を提案 |
+
+`KUROKO_MY_NAME` は文字起こしに出る自分の話者名（表示名）に合わせると精度が上がる（多少の表記ゆれはLLM側で吸収される）。
 
 ## 開発用: リプレイモード（Zoomなしで動作検証）
 

@@ -14,7 +14,7 @@ export interface Suggestion {
   topic: string;
   /** 今の議論の要約（DISCUSSION） */
   discussion: string;
-  /** 次に確認すべき質問・確認漏れ */
+  /** 次に話すべきこと（相手には聞くべきこと／本人には続けて話すべきこと） */
   questions: string[];
   /** Web検索で補った背景知識（FROM THE WEB） */
   web: WebNote[];

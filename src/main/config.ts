@@ -48,4 +48,7 @@ export const config = {
   replayMaxGapMs: Number(process.env.KUROKO_REPLAY_MAX_GAP_MS ?? 30_000),
   /** リプレイ時、有効発話行の先頭からこの件数をスキップして再生を始める（挨拶等の読み飛ばし用） */
   replaySkipLines: Number(process.env.KUROKO_REPLAY_SKIP_LINES ?? 0),
+
+  /** 本人（ユーザー自身）の話者名。文字起こしの話者名（表示名）に合わせる。未設定なら本人識別なしで動く */
+  myName: process.env.KUROKO_MY_NAME?.trim() || undefined,
 } as const;

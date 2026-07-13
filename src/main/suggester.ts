@@ -16,7 +16,8 @@ const SUMMARY_SCHEMA = {
     questions: {
       type: "array",
       items: { type: "string" },
-      description: "次に確認すべき質問・確認漏れ（1〜4個、なければ空配列）",
+      description:
+        "次に話すべきこと。相手が話しているなら聞くべきこと、本人が話しているなら続けて話すべきこと。1〜4個、なければ空配列",
     },
   },
   required: ["topic", "discussion", "questions"],
@@ -49,14 +50,25 @@ const WEB_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const SUMMARY_SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
+/**
+ * A（要約+questions）用のシステムプロンプトを組み立てる。
+ * myName が設定されている場合のみ、直近の発話主体（本人/相手）に応じて
+ * questions の方向性（続けて話すべきこと／聞くべきこと）を切り替える指示を追加する。
+ */
+function buildSummarySystemPrompt(myName?: string): string {
+  const questionsGuidance = myName
+    ? `2. questions: 「次に話すべきこと」を挙げる。文字起こしは各行が「話者名: 発話」の形式。行頭の話者名が「${myName}」（または表記が非常に近いもの）の行が本人の発話。直近の発話主体で判断し、本人以外が話している文脈なら「聞くべきこと」（次に確認すべきこと・詰め忘れ）を、本人が話している文脈なら「続けて話すべきこと」（本人が補足・展開すべき点）を挙げる。本人の発話が見当たらなければ聞くべきこと中心でよい。単一の提案内で両方が混在してもよい。今すぐ言う/聞く価値のあるものだけ。無理に埋めず、なければ空配列。`
+    : `2. questions: 会話の流れから「次に確認すべきこと」「詰め忘れている条件」を挙げる。今すぐ聞く価値のあるものだけ。無理に埋めず、なければ空配列。`;
+
+  return `あなたはオンライン会議に同席する優秀なアシスタントです。
 進行中の会議の文字起こしを読み、参加者が会議をうまく進められるよう、会議中に役立つ補足をリアルタイムで返します。
 
 以下を提供してください:
 1. topic / discussion: 今まさに話している話題と、その議論の簡潔な要約。
-2. questions: 会話の流れから「次に確認すべきこと」「詰め忘れている条件」を挙げる。今すぐ聞く価値のあるものだけ。無理に埋めず、なければ空配列。
+${questionsGuidance}
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
+}
 
 const WEB_SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
 進行中の会議の文字起こしを読み、参加者の議論を深める背景知識をWeb検索で調べて返します。
@@ -138,7 +150,7 @@ export async function generateSuggestion(
   const summaryTask: ClaudeTask = {
     ...baseTask,
     prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("提案", prevSummary)}`,
-    systemPrompt: SUMMARY_SYSTEM_PROMPT,
+    systemPrompt: buildSummarySystemPrompt(config.myName),
     schema: SUMMARY_SCHEMA,
     allowedTools: [],
     timeoutMs: config.claudeTimeoutMs,
