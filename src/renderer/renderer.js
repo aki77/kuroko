@@ -32,6 +32,7 @@ let hasUnseenLatest = false;
 el.refreshBtn.addEventListener("click", () => api.triggerNow());
 el.historyPrevBtn.addEventListener("click", () => goToHistory(cursor - 1));
 el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
+el.historyUnseen.addEventListener("click", () => goToHistory(history.length - 1));
 
 document.addEventListener("keydown", (e) => {
   if (!e.metaKey || !e.shiftKey) return;

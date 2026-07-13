@@ -285,6 +285,7 @@ body {
 .history-unseen {
   color: var(--q-accent);
   font-weight: 600;
+  cursor: pointer;
 }
 
 /* クリックスルー中は視覚的に薄くして状態を示す */
