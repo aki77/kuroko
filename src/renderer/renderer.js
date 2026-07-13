@@ -22,6 +22,7 @@ const el = {
   historyNextBtn: document.getElementById("historyNextBtn"),
   historyPosition: document.getElementById("historyPosition"),
   historyUnseen: document.getElementById("historyUnseen"),
+  urlTooltip: document.getElementById("urlTooltip"),
 };
 
 // 同一会議中のみ保持する提案履歴
@@ -145,6 +146,7 @@ function render(u) {
   }
 
   // FROM THE WEB
+  hideTooltip();
   el.web.replaceChildren();
   if (Array.isArray(s.web) && s.web.length > 0) {
     for (const w of s.web) {
@@ -155,7 +157,10 @@ function render(u) {
         title = document.createElement("a");
         title.className = "web-title web-link";
         title.href = "#";
-        title.title = w.url; // ホバーで完全URL
+        // ネイティブtitle属性はオーバーレイの背後に隠れるため自前ツールチップで表示
+        title.addEventListener("mouseenter", (e) => showTooltip(w.url, e));
+        title.addEventListener("mousemove", (e) => positionTooltip(e));
+        title.addEventListener("mouseleave", hideTooltip);
         title.addEventListener("click", (e) => {
           e.preventDefault();
           api.openExternal(w.url);
@@ -189,4 +194,29 @@ function render(u) {
 
 function truncate(str, n) {
   return str.length > n ? `${str.slice(0, n)}…` : str;
+}
+
+let tooltipRect = null; // 表示中はサイズ不変なのでmousemove毎の強制リフローを避けるためキャッシュ
+
+function showTooltip(url, e) {
+  el.urlTooltip.textContent = url;
+  el.urlTooltip.hidden = false;
+  tooltipRect = el.urlTooltip.getBoundingClientRect();
+  positionTooltip(e);
+}
+
+function positionTooltip(e) {
+  // マウス右下に少しオフセット。右端・下端でウィンドウ外にはみ出す場合は反転
+  const pad = 12;
+  const rect = tooltipRect;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  el.urlTooltip.style.left = `${Math.max(4, x)}px`;
+  el.urlTooltip.style.top = `${Math.max(4, y)}px`;
+}
+
+function hideTooltip() {
+  el.urlTooltip.hidden = true;
 }

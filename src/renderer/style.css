@@ -292,3 +292,21 @@ body {
 body.click-through .panel {
   opacity: 0.55;
 }
+
+/* URLホバー用ツールチップ。ネイティブtitle属性はalwaysOnTop透過ウィンドウの
+   背後に描画されて見えなくなるため、DOM内に自前描画してパネルより前面に出す */
+.url-tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 320px;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--fg);
+  background: rgba(20, 22, 28, 0.96);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  word-break: break-all;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
