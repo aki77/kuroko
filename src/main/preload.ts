@@ -15,6 +15,9 @@ const api = {
   triggerNow(): void {
     ipcRenderer.send("trigger-now");
   },
+  openExternal(url: string): void {
+    ipcRenderer.send("open-external", url);
+  },
 };
 
 contextBridge.exposeInMainWorld("kuroko", api);

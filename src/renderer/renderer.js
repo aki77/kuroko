@@ -75,8 +75,20 @@ api.onSuggestion((u) => {
     for (const w of s.web) {
       const item = document.createElement("div");
       item.className = "web-item";
-      const title = document.createElement("div");
-      title.className = "web-title";
+      let title;
+      if (w.url) {
+        title = document.createElement("a");
+        title.className = "web-title web-link";
+        title.href = "#";
+        title.title = w.url; // ホバーで完全URL
+        title.addEventListener("click", (e) => {
+          e.preventDefault();
+          api.openExternal(w.url);
+        });
+      } else {
+        title = document.createElement("div");
+        title.className = "web-title";
+      }
       title.textContent = w.title;
       const detail = document.createElement("div");
       detail.className = "web-detail";

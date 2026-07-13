@@ -216,6 +216,15 @@ body {
   color: var(--fg);
   margin-bottom: 2px;
 }
+.web-item .web-link {
+  display: inline-block;
+  color: var(--web-accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+.web-item .web-link:hover {
+  text-decoration: underline;
+}
 .web-item .web-detail {
   font-size: 12px;
   line-height: 1.55;

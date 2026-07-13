@@ -1,6 +1,7 @@
 import { join } from "node:path";
-import { app, BrowserWindow, globalShortcut, ipcMain, screen } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } from "electron";
 import type { Status, SuggestionUpdate } from "../shared/types";
+import { isHttpsUrl } from "../shared/url";
 import { config } from "./config";
 import { Orchestrator } from "./orchestrator";
 import { Replayer } from "./replayer";
@@ -89,6 +90,13 @@ function registerShortcuts(): void {
 
 // レンダラからの手動トリガー要求
 ipcMain.on("trigger-now", () => orchestrator?.triggerNow());
+
+// レンダラからの外部リンクオープン要求。メイン側でも再度URLスキームを検証する（多層防御）
+ipcMain.on("open-external", (_e, url: unknown) => {
+  if (isHttpsUrl(url)) {
+    shell.openExternal(url);
+  }
+});
 
 app.whenReady().then(async () => {
   createWindow();

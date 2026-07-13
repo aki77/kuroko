@@ -25,6 +25,8 @@ export interface WebNote {
   title: string;
   /** 補足の中身（1〜2文） */
   detail: string;
+  /** 出典URL（Web検索の参照元。無い場合あり） */
+  url?: string;
 }
 
 /** レンダラに送る提案更新イベント */
