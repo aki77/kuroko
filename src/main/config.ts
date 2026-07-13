@@ -46,4 +46,6 @@ export const config = {
   replaySpeed: Number(process.env.KUROKO_REPLAY_SPEED ?? 1),
   /** リプレイ時、行間の待機をこのms上限でクランプ（長い沈黙で止まって見えるのを防ぐ） */
   replayMaxGapMs: Number(process.env.KUROKO_REPLAY_MAX_GAP_MS ?? 30_000),
+  /** リプレイ時、有効発話行の先頭からこの件数をスキップして再生を始める（挨拶等の読み飛ばし用） */
+  replaySkipLines: Number(process.env.KUROKO_REPLAY_SKIP_LINES ?? 0),
 } as const;

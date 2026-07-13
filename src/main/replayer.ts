@@ -35,6 +35,13 @@ export class Replayer {
       return;
     }
 
+    const skip = nonNegativeIntOr(config.replaySkipLines, 0);
+    const before = lines.length;
+    lines = lines.slice(skip);
+    if (skip > 0) {
+      console.log(`[replayer] skipped first ${before - lines.length} of ${before} lines`);
+    }
+
     if (lines.length === 0) {
       console.warn("[replayer] source file has no valid lines:", this.sourceFile);
     }
@@ -136,6 +143,11 @@ export class Replayer {
 /** 正の有限数ならそのまま、そうでなければ fallback を返す（環境変数由来のNaN混入を防ぐ） */
 function positiveOr(value: number, fallback: number): number {
   return value > 0 && !Number.isNaN(value) ? value : fallback;
+}
+
+/** 0以上の有限整数ならそのまま、そうでなければ fallback を返す（負値・NaN・小数の混入を防ぐ） */
+function nonNegativeIntOr(value: number, fallback: number): number {
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
 }
 
 /** 既存規約 YYYY-MM-DDThhmmss-transcript.jsonl に合わせたファイル名を生成する（ローカル時刻） */

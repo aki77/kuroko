@@ -49,12 +49,18 @@ pnpm start
 
 ## 開発用: リプレイモード（Zoomなしで動作検証）
 
-過去の実ログを指定すると、そのタイムスタンプに沿った時間差で仮の文字起こしファイルを生成し、本番と同一の監視〜提案生成経路を再現できる。Zoom会議を開かずに提案の出方を確認できる。
+過去の実ログを指定すると、そのタイムスタンプに沿った時間差で仮の文字起こしファイルを生成し、本番と同一の監視〜提案生成経路を再現できる。Zoom会議を開かずに提案の出方を確認できる。先頭の挨拶等を読み飛ばして途中から再生することもできる。
 
 ```sh
 # 既存の実ログを10倍速でリプレイ
 KUROKO_REPLAY_FILE=~/zoom-transcripts/2026-07-02T140054-transcript.jsonl \
 KUROKO_REPLAY_SPEED=10 \
+pnpm start
+
+# 先頭30行（挨拶等）をスキップしてから再生
+KUROKO_REPLAY_FILE=~/zoom-transcripts/2026-07-02T140054-transcript.jsonl \
+KUROKO_REPLAY_SPEED=10 \
+KUROKO_REPLAY_SKIP_LINES=30 \
 pnpm start
 ```
 
@@ -67,6 +73,7 @@ pnpm start
 | `KUROKO_REPLAY_FILE` | （なし） | リプレイ元の過去ログjsonlのフルパス。指定するとリプレイモードで起動 |
 | `KUROKO_REPLAY_SPEED` | `1` | 再生速度の倍率（`10` で10倍速） |
 | `KUROKO_REPLAY_MAX_GAP_MS` | `30000` | 行間の待機時間の上限（長い沈黙で止まって見えるのを防ぐ） |
+| `KUROKO_REPLAY_SKIP_LINES` | `0` | 有効発話行の先頭からこの件数を読み飛ばしてから再生（挨拶等の読み飛ばし用） |
 
 ## アーキテクチャ
 
