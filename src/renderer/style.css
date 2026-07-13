@@ -60,6 +60,11 @@ body {
   font-weight: 600;
 }
 
+.brand-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
 .titlebar-actions {
   -webkit-app-region: no-drag; /* ボタンはクリックできるように */
 }
