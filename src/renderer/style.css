@@ -239,6 +239,52 @@ body {
   min-height: 30px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.footer-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.history-nav button {
+  -webkit-app-region: no-drag;
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 5px;
+  transition: all 0.15s;
+}
+.history-nav button:hover:not(:disabled) {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.08);
+}
+.history-nav button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.history-position {
+  min-width: 32px;
+  text-align: center;
+  color: rgba(236, 238, 242, 0.4);
+}
+
+.history-unseen {
+  color: var(--q-accent);
+  font-weight: 600;
 }
 
 /* クリックスルー中は視覚的に薄くして状態を示す */

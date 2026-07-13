@@ -16,10 +16,33 @@ const el = {
   webBlock: document.getElementById("webBlock"),
   web: document.getElementById("web"),
   footer: document.getElementById("footer"),
+  footerStatus: document.getElementById("footerStatus"),
   refreshBtn: document.getElementById("refreshBtn"),
+  historyPrevBtn: document.getElementById("historyPrevBtn"),
+  historyNextBtn: document.getElementById("historyNextBtn"),
+  historyPosition: document.getElementById("historyPosition"),
+  historyUnseen: document.getElementById("historyUnseen"),
 };
 
+// 同一会議中のみ保持する提案履歴
+let history = [];
+let cursor = -1; // history.length - 1 = 最新を表示中
+let hasUnseenLatest = false;
+
 el.refreshBtn.addEventListener("click", () => api.triggerNow());
+el.historyPrevBtn.addEventListener("click", () => goToHistory(cursor - 1));
+el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
+
+document.addEventListener("keydown", (e) => {
+  if (!e.metaKey || !e.shiftKey) return;
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    goToHistory(cursor - 1);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    goToHistory(cursor + 1);
+  }
+});
 
 api.onStatus((s) => {
   el.statusDot.className = "dot";
@@ -27,6 +50,7 @@ api.onStatus((s) => {
     case "no-meeting":
       el.statusDot.classList.add("idle");
       el.statusLine.textContent = "進行中の会議を待機中…";
+      resetHistory();
       break;
     case "idle":
       el.statusDot.classList.add("idle");
@@ -48,6 +72,56 @@ api.onStatus((s) => {
 });
 
 api.onSuggestion((u) => {
+  const last = history[history.length - 1];
+  if (!last || last.meetingFile !== u.meetingFile) {
+    resetHistory();
+  }
+
+  const wasViewingLatest = cursor === history.length - 1;
+  history.push(u);
+
+  if (wasViewingLatest) {
+    cursor = history.length - 1;
+    render(u);
+  } else {
+    hasUnseenLatest = true;
+  }
+  updateHistoryNav();
+});
+
+api.onClickThrough((enabled) => {
+  document.body.classList.toggle("click-through", enabled);
+});
+
+function resetHistory() {
+  history = [];
+  cursor = -1;
+  hasUnseenLatest = false;
+  updateHistoryNav();
+}
+
+function goToHistory(index) {
+  if (history.length === 0) return;
+  const clamped = Math.max(0, Math.min(index, history.length - 1));
+  if (clamped === cursor) return;
+  cursor = clamped;
+  render(history[cursor]);
+  if (cursor === history.length - 1) {
+    hasUnseenLatest = false;
+  }
+  updateHistoryNav();
+}
+
+function updateHistoryNav() {
+  const total = history.length;
+  const current = total === 0 ? 0 : cursor + 1;
+  el.historyPosition.textContent = `${current} / ${total}`;
+  el.historyPrevBtn.disabled = total <= 1 || cursor <= 0;
+  el.historyNextBtn.disabled = total <= 1 || cursor >= total - 1;
+  el.historyUnseen.hidden = !hasUnseenLatest;
+}
+
+function render(u) {
   const s = u.suggestion;
   el.empty.hidden = true;
 
@@ -109,12 +183,8 @@ api.onSuggestion((u) => {
   });
   const secs = (u.durationMs / 1000).toFixed(1);
   const cost = u.cumulativeCostUsd.toFixed(4);
-  el.footer.textContent = `Updated ${time} · ${secs}s · ~$${cost}`;
-});
-
-api.onClickThrough((enabled) => {
-  document.body.classList.toggle("click-through", enabled);
-});
+  el.footerStatus.textContent = `Updated ${time} · ${secs}s · ~$${cost}`;
+}
 
 function truncate(str, n) {
   return str.length > n ? `${str.slice(0, n)}…` : str;

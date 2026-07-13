@@ -42,7 +42,15 @@
         </section>
       </main>
 
-      <footer class="footer" id="footer"></footer>
+      <footer class="footer" id="footer">
+        <span class="footer-status" id="footerStatus"></span>
+        <span class="history-nav" id="historyNav">
+          <span class="history-unseen" id="historyUnseen" hidden>● 新着</span>
+          <button id="historyPrevBtn" title="前の提案 (⌘⇧←)">◀</button>
+          <span class="history-position" id="historyPosition">0 / 0</span>
+          <button id="historyNextBtn" title="次の提案 (⌘⇧→)">▶</button>
+        </span>
+      </footer>
     </div>
     <script src="renderer.js"></script>
   </body>
