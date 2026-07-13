@@ -47,6 +47,27 @@ pnpm start
 | `KUROKO_DEBOUNCE_MS` | `1500` | 追記検知後のデバウンス |
 | `KUROKO_CLAUDE_TIMEOUT_MS` | `60000` | claude -p のタイムアウト |
 
+## 開発用: リプレイモード（Zoomなしで動作検証）
+
+過去の実ログを指定すると、そのタイムスタンプに沿った時間差で仮の文字起こしファイルを生成し、本番と同一の監視〜提案生成経路を再現できる。Zoom会議を開かずに提案の出方を確認できる。
+
+```sh
+# 既存の実ログを10倍速でリプレイ
+KUROKO_REPLAY_FILE=~/zoom-transcripts/2026-07-02T140054-transcript.jsonl \
+KUROKO_REPLAY_SPEED=10 \
+pnpm start
+```
+
+- `KUROKO_REPLAY_FILE` を指定したときだけ有効化される隠しモード（未指定なら通常起動）。
+- `transcriptDir` 内に `<現在時刻>-transcript.jsonl` を作り、元ログを1行ずつ加工なしで追記していく。watcherが自動で「最新の会議」として拾う。
+- アプリ終了時（⌘Q / ターミナルでの `Ctrl+C`）に仮ファイルは削除され、`zoom-transcripts` を汚さない。
+
+| 変数 | 既定値 | 説明 |
+| --- | --- | --- |
+| `KUROKO_REPLAY_FILE` | （なし） | リプレイ元の過去ログjsonlのフルパス。指定するとリプレイモードで起動 |
+| `KUROKO_REPLAY_SPEED` | `1` | 再生速度の倍率（`10` で10倍速） |
+| `KUROKO_REPLAY_MAX_GAP_MS` | `30000` | 行間の待機時間の上限（長い沈黙で止まって見えるのを防ぐ） |
+
 ## アーキテクチャ
 
 ```

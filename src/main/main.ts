@@ -1,10 +1,13 @@
 import { join } from "node:path";
 import { app, BrowserWindow, globalShortcut, ipcMain, screen } from "electron";
 import type { Status, SuggestionUpdate } from "../shared/types";
+import { config } from "./config";
 import { Orchestrator } from "./orchestrator";
+import { Replayer } from "./replayer";
 
 let win: BrowserWindow | null = null;
 let orchestrator: Orchestrator | null = null;
+let replayer: Replayer | null = null;
 let clickThrough = false;
 
 const WIDTH = 380;
@@ -42,7 +45,7 @@ function createWindow(): void {
   win.loadFile(join(__dirname, "..", "renderer", "index.html"));
 }
 
-function wireOrchestrator(): void {
+async function wireOrchestrator(): Promise<void> {
   orchestrator = new Orchestrator();
   orchestrator.on("suggestion", (u: SuggestionUpdate) => {
     win?.webContents.send("suggestion", u);
@@ -50,7 +53,19 @@ function wireOrchestrator(): void {
   orchestrator.on("status", (s: Status) => {
     win?.webContents.send("status", s);
   });
-  void orchestrator.start();
+  await orchestrator.start(); // ready完了まで待つ（chokidarのignoreInitial:trueとの競合回避）
+
+  if (config.replayFile) {
+    // 【開発用】隠しリプレイモード: watcherがready後に仮ファイルを作成し、addを確実に検知させる
+    replayer = new Replayer(config.replayFile, config.replaySpeed);
+    await replayer.start();
+    const cleanup = () => {
+      replayer?.stopSync();
+      process.exit(0);
+    };
+    process.once("SIGINT", cleanup);
+    process.once("SIGTERM", cleanup);
+  }
 }
 
 function registerShortcuts(): void {
@@ -75,9 +90,9 @@ function registerShortcuts(): void {
 // レンダラからの手動トリガー要求
 ipcMain.on("trigger-now", () => orchestrator?.triggerNow());
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
-  wireOrchestrator();
+  await wireOrchestrator();
   registerShortcuts();
 
   app.on("activate", () => {
@@ -93,4 +108,5 @@ app.on("window-all-closed", () => {
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   void orchestrator?.stop();
+  replayer?.stopSync();
 });

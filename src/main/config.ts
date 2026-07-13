@@ -39,4 +39,11 @@ export const config = {
 
   /** web検索プロセス(B)のタイムアウト(ms)。検索往復があるためAより長め。 */
   claudeWebTimeoutMs: Number(process.env.KUROKO_CLAUDE_WEB_TIMEOUT_MS ?? 90_000),
+
+  /** 【開発用】指定すると過去ログをリプレイする隠しモード。過去ログJSONLのフルパス */
+  replayFile: process.env.KUROKO_REPLAY_FILE,
+  /** リプレイ再生速度の倍率（10で10倍速）。start差分をこの値で割って待機する */
+  replaySpeed: Number(process.env.KUROKO_REPLAY_SPEED ?? 1),
+  /** リプレイ時、行間の待機をこのms上限でクランプ（長い沈黙で止まって見えるのを防ぐ） */
+  replayMaxGapMs: Number(process.env.KUROKO_REPLAY_MAX_GAP_MS ?? 30_000),
 } as const;
