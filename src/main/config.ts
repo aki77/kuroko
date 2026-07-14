@@ -1,54 +1,194 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { Config, ConfigState, EditableConfig, EditableKey } from "../shared/types";
+import { EDITABLE_KEYS } from "../shared/types";
 
-/** 設定。環境変数で上書き可能にしておく。 */
-export const config = {
+/** GUI編集対象外（env専用）も含む全項目の既定値 */
+const DEFAULTS: Config = {
   /** Zoom文字起こしjsonlが保存されるディレクトリ */
-  transcriptDir: process.env.KUROKO_TRANSCRIPT_DIR ?? join(homedir(), "zoom-transcripts"),
+  transcriptDir: join(homedir(), "zoom-transcripts"),
 
   /** claude -p を実行する専用の空作業ディレクトリ（CLAUDE.md自動探索を回避する） */
-  claudeCwd: process.env.KUROKO_CLAUDE_CWD ?? join(homedir(), ".cache", "kuroko", "run"),
+  claudeCwd: join(homedir(), ".cache", "kuroko", "run"),
 
   /** 使用モデル */
-  model: process.env.KUROKO_MODEL ?? "sonnet",
+  model: "sonnet",
 
   /**
    * claude CLI の実行パス。Finder/Dockから起動するとログインシェルのPATHを
    * 継承せず `claude` が見つからないため、絶対パスで上書きできるようにする。
    * 未指定なら PATH 解決＋よくあるインストール先を探索する（resolveClaudeBin）。
    */
-  claudeBin: process.env.KUROKO_CLAUDE_BIN,
+  claudeBin: undefined,
 
   /**
    * 自動トリガーの閾値: 前回の提案生成以降、新規に確定した発話がこの件数たまったら
    * 次の提案を生成する。
    */
-  triggerCueCount: Number(process.env.KUROKO_TRIGGER_CUES ?? 8),
+  triggerCueCount: 8,
 
   /** Claudeに渡す直近の発話数（長い会議でも応答性を保つため直近だけに絞る） */
-  recentCueLimit: Number(process.env.KUROKO_RECENT_LIMIT ?? 40),
+  recentCueLimit: 40,
 
   /**
    * ファイル追記を検知してから実際にトリガー判定するまでのデバウンス(ms)。
    * jsonlは短時間に連続追記されるためまとめて処理する。
    */
-  debounceMs: Number(process.env.KUROKO_DEBOUNCE_MS ?? 1500),
+  debounceMs: 1500,
 
   /** claude -p 呼び出しのタイムアウト(ms) */
-  claudeTimeoutMs: Number(process.env.KUROKO_CLAUDE_TIMEOUT_MS ?? 60_000),
+  claudeTimeoutMs: 60_000,
 
   /** web検索プロセス(B)のタイムアウト(ms)。検索往復があるためAより長め。 */
-  claudeWebTimeoutMs: Number(process.env.KUROKO_CLAUDE_WEB_TIMEOUT_MS ?? 90_000),
+  claudeWebTimeoutMs: 90_000,
 
   /** 【開発用】指定すると過去ログをリプレイする隠しモード。過去ログJSONLのフルパス */
-  replayFile: process.env.KUROKO_REPLAY_FILE,
+  replayFile: undefined,
   /** リプレイ再生速度の倍率（10で10倍速）。start差分をこの値で割って待機する */
-  replaySpeed: Number(process.env.KUROKO_REPLAY_SPEED ?? 1),
+  replaySpeed: 1,
   /** リプレイ時、行間の待機をこのms上限でクランプ（長い沈黙で止まって見えるのを防ぐ） */
-  replayMaxGapMs: Number(process.env.KUROKO_REPLAY_MAX_GAP_MS ?? 30_000),
+  replayMaxGapMs: 30_000,
   /** リプレイ時、有効発話行の先頭からこの件数をスキップして再生を始める（挨拶等の読み飛ばし用） */
-  replaySkipLines: Number(process.env.KUROKO_REPLAY_SKIP_LINES ?? 0),
+  replaySkipLines: 0,
 
   /** 本人（ユーザー自身）の話者名。文字起こしの話者名（表示名）に合わせる。未設定なら本人識別なしで動く */
-  myName: process.env.KUROKO_MY_NAME?.trim() || undefined,
-} as const;
+  myName: undefined,
+};
+
+/** env(KUROKO_*) の生の値。GUI編集対象キーのみ、envLockedキーの判定と正規化の入力に使う */
+const RAW_ENV: Record<EditableKey, string | undefined> = {
+  model: process.env.KUROKO_MODEL,
+  myName: process.env.KUROKO_MY_NAME,
+  triggerCueCount: process.env.KUROKO_TRIGGER_CUES,
+  recentCueLimit: process.env.KUROKO_RECENT_LIMIT,
+  debounceMs: process.env.KUROKO_DEBOUNCE_MS,
+  claudeTimeoutMs: process.env.KUROKO_CLAUDE_TIMEOUT_MS,
+  claudeWebTimeoutMs: process.env.KUROKO_CLAUDE_WEB_TIMEOUT_MS,
+  transcriptDir: process.env.KUROKO_TRANSCRIPT_DIR,
+};
+
+/**
+ * 起動時に一度だけ確定する「envで固定中か」。以降不変（GUI操作では変わらない）。
+ * normalizeString/normalizeOptionalName と同じ基準（trimして空なら未設定扱い）で判定する。
+ * こうしないと `KUROKO_MY_NAME=`（空文字）等で実効値は未設定なのにGUIだけロックされてしまう。
+ */
+const envLockedKeys: Record<EditableKey, boolean> = Object.fromEntries(
+  EDITABLE_KEYS.map((k) => [k, !!RAW_ENV[k]?.trim()]),
+) as Record<EditableKey, boolean>;
+
+/**
+ * 消費側は `import { config } from "./config"` して `config.xxx` を都度読むため、
+ * このオブジェクト自体の参照は固定し、中身だけを書き換える（Object.assign）。
+ * こうすることで GUI からの変更が全消費側に無改修で伝播する。
+ *
+ * GUI編集対象外（env専用）のキーは、ここで一度だけ env から解決して固定値にする。
+ */
+export const config: Config = {
+  ...DEFAULTS,
+  claudeCwd: process.env.KUROKO_CLAUDE_CWD ?? DEFAULTS.claudeCwd,
+  claudeBin: process.env.KUROKO_CLAUDE_BIN,
+  replayFile: process.env.KUROKO_REPLAY_FILE,
+  replaySpeed: normalizePositiveNumber(process.env.KUROKO_REPLAY_SPEED, DEFAULTS.replaySpeed),
+  replayMaxGapMs: normalizeNumber(process.env.KUROKO_REPLAY_MAX_GAP_MS, DEFAULTS.replayMaxGapMs),
+  replaySkipLines: normalizeNumber(process.env.KUROKO_REPLAY_SKIP_LINES, DEFAULTS.replaySkipLines, 0),
+};
+
+/** 数値項目を正規化する。外部入力(env/JSON)を信頼せず、Number()→NaN/範囲を最小値1にクランプする */
+function normalizeNumber(raw: unknown, fallback: number, min = 1): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.trunc(n));
+}
+
+/**
+ * 倍率など小数を許す正の数を正規化する（trunc/最小値クランプをしない）。
+ * replaySpeed専用: 0.5倍速のようなfractionalな指定を壊さないため normalizeNumber とは分離する。
+ */
+function normalizePositiveNumber(raw: unknown, fallback: number): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function normalizeString(raw: unknown, fallback: string): string {
+  if (typeof raw !== "string") return fallback;
+  const trimmed = raw.trim();
+  return trimmed || fallback;
+}
+
+function normalizeOptionalName(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  return raw.trim() || undefined;
+}
+
+/** 1キー分を「値の候補（string|number|undefined等、raw）→正規化済みの実効値」に変換する */
+function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeof key] {
+  switch (key) {
+    case "model":
+      return normalizeString(raw, DEFAULTS.model);
+    case "myName":
+      return normalizeOptionalName(raw);
+    case "triggerCueCount":
+      return normalizeNumber(raw, DEFAULTS.triggerCueCount);
+    case "recentCueLimit":
+      return normalizeNumber(raw, DEFAULTS.recentCueLimit);
+    case "debounceMs":
+      return normalizeNumber(raw, DEFAULTS.debounceMs, 0);
+    case "claudeTimeoutMs":
+      return normalizeNumber(raw, DEFAULTS.claudeTimeoutMs);
+    case "claudeWebTimeoutMs":
+      return normalizeNumber(raw, DEFAULTS.claudeWebTimeoutMs);
+    case "transcriptDir":
+      return normalizeString(raw, DEFAULTS.transcriptDir);
+  }
+}
+
+/**
+ * 起動時に一度呼ぶ。優先順位 `env > persisted(保存済みJSON) > DEFAULTS` で
+ * 各キーを解決し、config オブジェクトの中身を書き換える。
+ * **main の watcher 起動より前に呼ぶこと**（transcriptDir が watcher に使われるため）。
+ */
+export function loadConfig(persisted: Partial<EditableConfig> | null): void {
+  const resolved = {} as Record<EditableKey, unknown>;
+  for (const key of EDITABLE_KEYS) {
+    const raw = envLockedKeys[key] ? RAW_ENV[key] : (persisted?.[key] ?? RAW_ENV[key]);
+    resolved[key] = normalizeEditable(key, raw);
+  }
+  Object.assign(config, resolved);
+}
+
+/**
+ * GUIからの変更を適用する。env固定キーは無視し、それ以外を正規化して反映する。
+ * 呼び出し側で永続化(writeSettings)・watcher再起動判定を行う。
+ */
+export function applyEditable(next: Partial<EditableConfig>): void {
+  const resolved = {} as Record<EditableKey, unknown>;
+  for (const key of EDITABLE_KEYS) {
+    if (envLockedKeys[key]) continue; // env固定キーはGUIから変更不可
+    if (!(key in next)) continue;
+    resolved[key] = normalizeEditable(key, next[key]);
+  }
+  Object.assign(config, resolved);
+}
+
+/** config/DEFAULTS から EditableConfig 部分だけを抜き出す */
+function pickEditable(src: Config): EditableConfig {
+  return Object.fromEntries(EDITABLE_KEYS.map((k) => [k, src[k]])) as EditableConfig;
+}
+
+/** 現在の実効値と envLocked を返す。設定ウィンドウの初期表示に使う */
+export function getConfigState(): ConfigState {
+  return { values: pickEditable(config), envLocked: envLockedKeys };
+}
+
+/**
+ * 永続化すべき編集値（＝env固定でないキーの実効値）だけを返す。
+ * env固定キーは書き込まない（applyEditable がスキップするのと対称。
+ * env を外したとき、過去のenv値が settings.json に残って復帰しない事故を防ぐ）。
+ */
+export function getPersistableValues(): Partial<EditableConfig> {
+  const out: Record<string, unknown> = {};
+  for (const key of EDITABLE_KEYS) {
+    if (!envLockedKeys[key]) out[key] = config[key];
+  }
+  return out as Partial<EditableConfig>;
+}

@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Status, SuggestionUpdate } from "../shared/types";
+import type {
+  ConfigState,
+  EditableConfig,
+  Status,
+  SuggestionUpdate,
+} from "../shared/types";
 
 /** レンダラに公開するAPI。contextIsolation下で安全に橋渡しする。 */
 const api = {
@@ -17,6 +22,16 @@ const api = {
   },
   openExternal(url: string): void {
     ipcRenderer.send("open-external", url);
+  },
+  // --- 設定（設定ウィンドウで使用。オーバーレイ側では未使用） ---
+  getConfig(): Promise<ConfigState> {
+    return ipcRenderer.invoke("config:get");
+  },
+  setConfig(v: Partial<EditableConfig>): Promise<{ ok: boolean; state: ConfigState }> {
+    return ipcRenderer.invoke("config:set", v);
+  },
+  openSettings(): void {
+    ipcRenderer.send("open-settings");
   },
 };
 

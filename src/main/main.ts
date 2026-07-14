@@ -1,12 +1,14 @@
 import { join } from "node:path";
 import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } from "electron";
-import type { Status, SuggestionUpdate } from "../shared/types";
+import type { EditableConfig, Status, SuggestionUpdate } from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
-import { config } from "./config";
+import { applyEditable, config, getConfigState, getPersistableValues, loadConfig } from "./config";
 import { Orchestrator } from "./orchestrator";
 import { Replayer } from "./replayer";
+import { readSettings, writeSettings } from "./settings-store";
 
 let win: BrowserWindow | null = null;
+let settingsWin: BrowserWindow | null = null;
 let orchestrator: Orchestrator | null = null;
 let replayer: Replayer | null = null;
 let clickThrough = false;
@@ -44,6 +46,32 @@ function createWindow(): void {
   win.setContentProtection(true);
 
   win.loadFile(join(__dirname, "..", "renderer", "index.html"));
+}
+
+/**
+ * 設定ウィンドウを開く。オーバーレイと違い普通のフレーム付き通常ウィンドウ
+ * （transparent/alwaysOnTop/contentProtection は付けない）。多重生成はガードする。
+ * preload は overlay と共用（設定側で使わないAPIも生えるが無害）。
+ */
+function openSettingsWindow(): void {
+  if (settingsWin) {
+    settingsWin.focus();
+    return;
+  }
+  settingsWin = new BrowserWindow({
+    width: 480,
+    height: 620,
+    title: "KUROKO 設定",
+    webPreferences: {
+      preload: join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWin.on("closed", () => {
+    settingsWin = null;
+  });
+  settingsWin.loadFile(join(__dirname, "..", "renderer", "settings.html"));
 }
 
 async function wireOrchestrator(): Promise<void> {
@@ -98,7 +126,26 @@ ipcMain.on("open-external", (_e, url: unknown) => {
   }
 });
 
+// ⚙ボタンから設定ウィンドウを開く
+ipcMain.on("open-settings", () => openSettingsWindow());
+
+// 設定ウィンドウ ↔ メインの往復（invoke/handle）
+ipcMain.handle("config:get", () => getConfigState());
+ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
+  const before = config.transcriptDir;
+  applyEditable(next); // env固定キーは無視され、正規化された実効値がconfigに反映される
+  writeSettings(getPersistableValues()); // env固定でないキーの実効値（クランプ後）だけを永続化する
+  // transcriptDir が変わったときだけ watcher を再起動する（それ以外は即反映で足りる）
+  if (config.transcriptDir !== before) {
+    await orchestrator?.restartWatcher();
+  }
+  return { ok: true, state: getConfigState() };
+});
+
 app.whenReady().then(async () => {
+  // 設定を確定してから watcher を起動する（transcriptDir が watcher に使われるため最重要）
+  loadConfig(readSettings());
+
   createWindow();
   await wireOrchestrator();
   registerShortcuts();

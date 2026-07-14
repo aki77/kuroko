@@ -49,3 +49,41 @@ export type Status =
   | { kind: "querying" }
   | { kind: "error"; message: string }
   | { kind: "no-meeting" };
+
+/** アプリ全体の設定。値は config.ts が env > 保存済みJSON > 既定値の優先順位で解決する */
+export interface Config {
+  transcriptDir: string;
+  claudeCwd: string;
+  model: string;
+  claudeBin?: string;
+  triggerCueCount: number;
+  recentCueLimit: number;
+  debounceMs: number;
+  claudeTimeoutMs: number;
+  claudeWebTimeoutMs: number;
+  replayFile?: string;
+  replaySpeed: number;
+  replayMaxGapMs: number;
+  replaySkipLines: number;
+  myName?: string;
+}
+
+/** GUIで編集可能なキー（この順序でフォームに並べる） */
+export const EDITABLE_KEYS = [
+  "model",
+  "myName",
+  "triggerCueCount",
+  "recentCueLimit",
+  "debounceMs",
+  "claudeTimeoutMs",
+  "claudeWebTimeoutMs",
+  "transcriptDir",
+] as const;
+export type EditableKey = (typeof EDITABLE_KEYS)[number];
+export type EditableConfig = Pick<Config, EditableKey>;
+
+/** renderer(設定ウィンドウ)に渡す状態。現在の実効値＋envで固定中か */
+export interface ConfigState {
+  values: EditableConfig;
+  envLocked: Record<EditableKey, boolean>;
+}

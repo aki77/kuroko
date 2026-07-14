@@ -36,17 +36,24 @@ pnpm start
 
 タイトルバーをドラッグしてウィンドウを移動できます。
 
-## 設定（環境変数）
+## 設定
 
-| 変数 | 既定値 | 説明 |
-| --- | --- | --- |
-| `KUROKO_TRANSCRIPT_DIR` | `~/zoom-transcripts` | 文字起こしjsonlの保存先 |
-| `KUROKO_MODEL` | `sonnet` | 使用モデル |
-| `KUROKO_TRIGGER_CUES` | `8` | 自動提案する新規発話の閾値 |
-| `KUROKO_RECENT_LIMIT` | `40` | Claudeに渡す直近発話数 |
-| `KUROKO_DEBOUNCE_MS` | `1500` | 追記検知後のデバウンス |
-| `KUROKO_CLAUDE_TIMEOUT_MS` | `60000` | claude -p のタイムアウト |
-| `KUROKO_MY_NAME` | （なし） | 本人の話者名。設定するとその人の発話には「続けて話すべきこと」を提案 |
+下表の項目はオーバーレイ右上の ⚙ ボタンから開く**設定ウィンドウでGUI変更・永続化**できる（保存は `~/Library/Application Support/kuroko/settings.json`）。変更は保存後すぐ反映される（`文字起こしディレクトリ` の変更時のみ監視を再起動する）。
+
+環境変数でも設定でき、**優先順位は `環境変数 > GUI保存値 > 既定値`**。環境変数が設定されているキーは設定ウィンドウで編集不可（「envで固定中」表示）になる。
+
+| 変数 | 既定値 | GUI | 説明 |
+| --- | --- | --- | --- |
+| `KUROKO_MODEL` | `sonnet` | ✓ | 使用モデル |
+| `KUROKO_MY_NAME` | （なし） | ✓ | 本人の話者名。設定するとその人の発話には「続けて話すべきこと」を提案 |
+| `KUROKO_TRIGGER_CUES` | `8` | ✓ | 自動提案する新規発話の閾値 |
+| `KUROKO_RECENT_LIMIT` | `40` | ✓ | Claudeに渡す直近発話数 |
+| `KUROKO_DEBOUNCE_MS` | `1500` | ✓ | 追記検知後のデバウンス |
+| `KUROKO_CLAUDE_TIMEOUT_MS` | `60000` | ✓ | 要約プロセス(A)のタイムアウト |
+| `KUROKO_CLAUDE_WEB_TIMEOUT_MS` | `90000` | ✓ | Web検索プロセス(B)のタイムアウト |
+| `KUROKO_TRANSCRIPT_DIR` | `~/zoom-transcripts` | ✓ | 文字起こしjsonlの保存先 |
+| `KUROKO_CLAUDE_CWD` | `~/.cache/kuroko/run` | – | claude -p を実行する作業ディレクトリ |
+| `KUROKO_CLAUDE_BIN` | （PATH解決） | – | claude CLI の絶対パス |
 
 `KUROKO_MY_NAME` は文字起こしに出る自分の話者名（表示名）に合わせると精度が上がる（多少の表記ゆれはLLM側で吸収される）。
 

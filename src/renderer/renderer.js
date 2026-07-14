@@ -18,6 +18,7 @@ const el = {
   footer: document.getElementById("footer"),
   footerStatus: document.getElementById("footerStatus"),
   refreshBtn: document.getElementById("refreshBtn"),
+  settingsBtn: document.getElementById("settingsBtn"),
   historyPrevBtn: document.getElementById("historyPrevBtn"),
   historyNextBtn: document.getElementById("historyNextBtn"),
   historyPosition: document.getElementById("historyPosition"),
@@ -31,6 +32,7 @@ let cursor = -1; // history.length - 1 = 最新を表示中
 let hasUnseenLatest = false;
 
 el.refreshBtn.addEventListener("click", () => api.triggerNow());
+el.settingsBtn.addEventListener("click", () => api.openSettings());
 el.historyPrevBtn.addEventListener("click", () => goToHistory(cursor - 1));
 el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
 el.historyUnseen.addEventListener("click", () => goToHistory(history.length - 1));

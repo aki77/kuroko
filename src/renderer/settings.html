@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KUROKO 設定</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>KUROKO 設定</h1>
+      <p class="lead">
+        変更は保存後すぐに反映されます（再起動不要）。<br />
+        環境変数で設定されている項目は編集できません。
+      </p>
+
+      <form id="form">
+        <label class="field" data-key="model">
+          <span class="label">モデル</span>
+          <input type="text" name="model" autocomplete="off" spellcheck="false" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">claude -p に渡すモデル名（例: sonnet, opus）</span>
+        </label>
+
+        <label class="field" data-key="myName">
+          <span class="label">自分の話者名</span>
+          <input type="text" name="myName" autocomplete="off" spellcheck="false" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">
+            文字起こしに出る自分の表示名。設定すると本人の発話には「続けて話すべきこと」を提案（空欄で無効）
+          </span>
+        </label>
+
+        <label class="field" data-key="triggerCueCount">
+          <span class="label">自動提案の閾値（発話数）</span>
+          <input type="number" name="triggerCueCount" min="1" step="1" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">この件数の新規発話がたまると自動で提案を生成</span>
+        </label>
+
+        <label class="field" data-key="recentCueLimit">
+          <span class="label">Claudeに渡す直近発話数</span>
+          <input type="number" name="recentCueLimit" min="1" step="1" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">多いほど文脈が豊富だが応答は遅くなる</span>
+        </label>
+
+        <label class="field" data-key="debounceMs">
+          <span class="label">デバウンス (ms)</span>
+          <input type="number" name="debounceMs" min="0" step="100" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">追記検知からトリガー判定までの待機</span>
+        </label>
+
+        <label class="field" data-key="claudeTimeoutMs">
+          <span class="label">要約タイムアウト (ms)</span>
+          <input type="number" name="claudeTimeoutMs" min="1" step="1000" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">要約プロセス(A)のタイムアウト</span>
+        </label>
+
+        <label class="field" data-key="claudeWebTimeoutMs">
+          <span class="label">Web検索タイムアウト (ms)</span>
+          <input type="number" name="claudeWebTimeoutMs" min="1" step="1000" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">Web検索プロセス(B)のタイムアウト（Aより長め）</span>
+        </label>
+
+        <label class="field" data-key="transcriptDir">
+          <span class="label">文字起こしディレクトリ</span>
+          <input type="text" name="transcriptDir" autocomplete="off" spellcheck="false" />
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">変更すると監視対象を切り替えます（watcher再起動）</span>
+        </label>
+
+        <div class="actions">
+          <span class="save-status" id="saveStatus"></span>
+          <button type="submit" id="saveBtn">保存</button>
+        </div>
+      </form>
+    </div>
+    <script src="settings.js"></script>
+  </body>
+</html>

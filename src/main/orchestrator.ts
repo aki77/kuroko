@@ -33,6 +33,12 @@ export class Orchestrator extends EventEmitter {
   private cumulativeCostUsd = 0;
 
   async start(): Promise<void> {
+    this.bindWatcher();
+    await this.watcher.start();
+  }
+
+  /** 現在の this.watcher にリスナを登録する。watcher差し替え時にも再利用する */
+  private bindWatcher(): void {
     this.watcher.on("no-meeting", () => this.emit("status", { kind: "no-meeting" }));
 
     this.watcher.on("meeting", (file) => {
@@ -51,7 +57,26 @@ export class Orchestrator extends EventEmitter {
       this.latestCues = cues;
       this.scheduleMaybeRun();
     });
+  }
 
+  /**
+   * transcriptDir 変更に伴い watcher を作り直す。
+   * 旧watcherを止め、会議状態を初期化してから新しい TranscriptWatcher を張り直す。
+   * cumulativeCostUsd は会議跨ぎで累積する参考値なのでリセットしない（既存踏襲）。
+   */
+  async restartWatcher(): Promise<void> {
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    await this.watcher.stop();
+
+    // "meeting" ハンドラ相当の初期化（新watcherがまだ何も検知していない状態に戻す）
+    this.currentFile = undefined;
+    this.previous = null;
+    this.cueCountAtLastRun = 0;
+    this.latestCues = [];
+    this.pendingTrigger = false;
+
+    this.watcher = new TranscriptWatcher();
+    this.bindWatcher();
     await this.watcher.start();
   }
 
