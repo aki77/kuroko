@@ -76,6 +76,21 @@ h1 {
   cursor: not-allowed;
 }
 
+/* checkbox項目はtext/numberと違い横幅いっぱいにしない（.field inputのwidth:100%を打ち消す） */
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.checkbox-row input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.checkbox-row .label {
+  margin-bottom: 0;
+}
+
 .field .hint {
   display: block;
   font-size: 10.5px;

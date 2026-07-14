@@ -73,6 +73,17 @@
           <span class="hint">変更すると監視対象を切り替えます（watcher再起動）</span>
         </label>
 
+        <div class="field" data-key="contentProtection">
+          <span class="checkbox-row">
+            <input type="checkbox" name="contentProtection" />
+            <span class="label">画面共有・録画から隠す</span>
+          </span>
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">
+            ONで画面共有・録画にオーバーレイが映らなくなります。デバッグ時にスクショを共有する場合はOFFにしてください
+          </span>
+        </div>
+
         <div class="actions">
           <span class="save-status" id="saveStatus"></span>
           <button type="submit" id="saveBtn">保存</button>

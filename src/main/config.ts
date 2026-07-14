@@ -53,6 +53,9 @@ const DEFAULTS: Config = {
 
   /** 本人（ユーザー自身）の話者名。文字起こしの話者名（表示名）に合わせる。未設定なら本人識別なしで動く */
   myName: undefined,
+
+  /** ★Cluelyの肝: ONでオーバーレイを画面共有・画面録画に映さない。デバッグ時のスクショ共有用にOFFへ切替え可能にする */
+  contentProtection: true,
 };
 
 /** env(KUROKO_*) の生の値。GUI編集対象キーのみ、envLockedキーの判定と正規化の入力に使う */
@@ -65,6 +68,7 @@ const RAW_ENV: Record<EditableKey, string | undefined> = {
   claudeTimeoutSec: process.env.KUROKO_CLAUDE_TIMEOUT_SEC,
   claudeWebTimeoutSec: process.env.KUROKO_CLAUDE_WEB_TIMEOUT_SEC,
   transcriptDir: process.env.KUROKO_TRANSCRIPT_DIR,
+  contentProtection: process.env.KUROKO_CONTENT_PROTECTION,
 };
 
 /**
@@ -120,6 +124,18 @@ function normalizeOptionalName(raw: unknown): string | undefined {
   return raw.trim() || undefined;
 }
 
+/** boolean項目を正規化する。env由来の文字列("true"/"false")にも対応する */
+function normalizeBoolean(raw: unknown, fallback: boolean): boolean {
+  if (typeof raw === "boolean") return raw; // GUI/JSON からの真偽値
+  if (typeof raw === "string") {
+    // env は文字列でしか来ない。trimして空なら未設定扱い（envLockedKeysの判定基準と揃える）
+    const s = raw.trim().toLowerCase();
+    if (s === "true") return true;
+    if (s === "false") return false;
+  }
+  return fallback;
+}
+
 /** 1キー分を「値の候補（string|number|undefined等、raw）→正規化済みの実効値」に変換する */
 function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeof key] {
   switch (key) {
@@ -139,6 +155,8 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
       return normalizeNumber(raw, DEFAULTS.claudeWebTimeoutSec);
     case "transcriptDir":
       return normalizeString(raw, DEFAULTS.transcriptDir);
+    case "contentProtection":
+      return normalizeBoolean(raw, DEFAULTS.contentProtection);
   }
 }
 

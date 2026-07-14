@@ -33,8 +33,12 @@ function applyState(state) {
     const badge = field.querySelector(".lock-badge");
     const value = state.values[key];
 
-    // 実効値を表示。myNameのundefinedは空文字に。
-    input.value = value == null ? "" : String(value);
+    if (input.type === "checkbox") {
+      input.checked = value === true;
+    } else {
+      // 実効値を表示。myNameのundefinedは空文字に。
+      input.value = value == null ? "" : String(value);
+    }
 
     const locked = state.envLocked[key];
     input.disabled = locked;
@@ -53,7 +57,9 @@ async function save() {
     const input = field.querySelector("input");
     if (input.disabled) continue; // env固定キーは送らない
 
-    if (input.type === "number") {
+    if (input.type === "checkbox") {
+      payload[key] = input.checked;
+    } else if (input.type === "number") {
       const min = Number(input.min || 1);
       const n = Number(input.value);
       if (!Number.isFinite(n) || n < min) {

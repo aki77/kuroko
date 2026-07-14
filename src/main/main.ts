@@ -42,8 +42,8 @@ function createWindow(): void {
   win.setAlwaysOnTop(true, "screen-saver");
   // すべての仮想デスクトップ／フルスクリーンスペースで表示
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  // ★Cluelyの肝: 画面共有・画面録画にこのウィンドウを映さない
-  win.setContentProtection(true);
+  // ★Cluelyの肝: 画面共有・画面録画にこのウィンドウを映さない（設定で切替可能。config:setハンドラで即反映もする）
+  win.setContentProtection(config.contentProtection);
 
   win.loadFile(join(__dirname, "..", "renderer", "index.html"));
 }
@@ -133,11 +133,16 @@ ipcMain.on("open-settings", () => openSettingsWindow());
 ipcMain.handle("config:get", () => getConfigState());
 ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
   const before = config.transcriptDir;
+  const contentProtectionBefore = config.contentProtection;
   applyEditable(next); // env固定キーは無視され、正規化された実効値がconfigに反映される
   writeSettings(getPersistableValues()); // env固定でないキーの実効値（クランプ後）だけを永続化する
   // transcriptDir が変わったときだけ watcher を再起動する（それ以外は即反映で足りる）
   if (config.transcriptDir !== before) {
     await orchestrator?.restartWatcher();
+  }
+  // content protectionが変わったときだけ実行中のオーバーレイへ即反映する（再起動不要にするため）
+  if (config.contentProtection !== contentProtectionBefore) {
+    win?.setContentProtection(config.contentProtection);
   }
   return { ok: true, state: getConfigState() };
 });

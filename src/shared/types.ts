@@ -66,6 +66,7 @@ export interface Config {
   replayMaxGapMs: number;
   replaySkipLines: number;
   myName?: string;
+  contentProtection: boolean;
 }
 
 /** GUIで編集可能なキー（この順序でフォームに並べる） */
@@ -78,6 +79,7 @@ export const EDITABLE_KEYS = [
   "claudeTimeoutSec",
   "claudeWebTimeoutSec",
   "transcriptDir",
+  "contentProtection",
 ] as const;
 export type EditableKey = (typeof EDITABLE_KEYS)[number];
 export type EditableConfig = Pick<Config, EditableKey>;
