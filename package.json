@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json && pnpm run copy-renderer",
     "copy-renderer": "node scripts/copy-renderer.mjs",
     "start": "pnpm run build && env -u ELECTRON_RUN_AS_NODE electron .",
-    "dev": "tsc -w -p tsconfig.json"
+    "dev": "tsc -w -p tsconfig.json",
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "node --test --experimental-strip-types 'src/**/*.test.ts'"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
