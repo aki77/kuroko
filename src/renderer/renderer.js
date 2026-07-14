@@ -26,6 +26,9 @@ const el = {
   historyPosition: document.getElementById("historyPosition"),
   historyUnseen: document.getElementById("historyUnseen"),
   urlTooltip: document.getElementById("urlTooltip"),
+  projectDirInput: document.getElementById("projectDirInput"),
+  projectDirHistory: document.getElementById("projectDirHistory"),
+  projectDirLock: document.getElementById("projectDirLock"),
 };
 
 // 同一会議中のみ保持する提案履歴
@@ -98,6 +101,75 @@ api.onSuggestion((u) => {
 api.onClickThrough((enabled) => {
   document.body.classList.toggle("click-through", enabled);
 });
+
+// --- 参照プロジェクトディレクトリ入力欄 ---
+// projectDirはmain側で非永続化（起動ごとに空へリセット）。履歴のみレンダラのlocalStorageで保持する。
+const PROJECT_DIR_HISTORY_KEY = "kuroko:projectDirHistory";
+const PROJECT_DIR_HISTORY_MAX = 12;
+
+function loadProjectDirHistory() {
+  try {
+    const raw = localStorage.getItem(PROJECT_DIR_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveProjectDirHistory(list) {
+  try {
+    localStorage.setItem(PROJECT_DIR_HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    // localStorage不可時は履歴保存を諦める（機能自体は継続）
+  }
+}
+
+// history配列を受け取って<datalist>へ反映する（呼び出し側が既に持っている配列を渡し、再読み込みを避ける）
+function renderProjectDirHistoryOptions(history) {
+  el.projectDirHistory.replaceChildren();
+  for (const dir of history) {
+    const option = document.createElement("option");
+    option.value = dir;
+    el.projectDirHistory.appendChild(option);
+  }
+}
+
+function addProjectDirHistory(dir) {
+  const history = loadProjectDirHistory().filter((v) => v !== dir);
+  history.unshift(dir);
+  const trimmed = history.slice(0, PROJECT_DIR_HISTORY_MAX);
+  saveProjectDirHistory(trimmed);
+  renderProjectDirHistoryOptions(trimmed);
+}
+
+async function initProjectDirInput() {
+  renderProjectDirHistoryOptions(loadProjectDirHistory());
+
+  const state = await api.getConfig();
+  const locked = state.envLocked.projectDir === true;
+  el.projectDirInput.value = state.values.projectDir || "";
+  el.projectDirInput.disabled = locked;
+  el.projectDirLock.hidden = !locked;
+
+  if (locked) return; // env固定時は編集不可なので保存/履歴処理も不要
+
+  const commit = () => {
+    const value = el.projectDirInput.value.trim();
+    api.setConfig({ projectDir: value });
+    if (value) addProjectDirHistory(value);
+  };
+
+  el.projectDirInput.addEventListener("change", commit);
+  el.projectDirInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
+  });
+}
+
+initProjectDirInput();
 
 function resetHistory() {
   history = [];

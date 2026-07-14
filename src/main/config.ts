@@ -94,6 +94,12 @@ const envLockedKeys: Record<EditableKey, boolean> = Object.fromEntries(
 ) as Record<EditableKey, boolean>;
 
 /**
+ * 常にsettings.jsonへ永続化しない（env固定時を除く）キーの集合。envLockedKeysと対称の仕組み。
+ * projectDirは会議ごとに変わるため、起動ごとに空へリセットしたい（非永続化）。
+ */
+const NON_PERSISTED_KEYS = new Set<EditableKey>(["projectDir"]);
+
+/**
  * 消費側は `import { config } from "./config"` して `config.xxx` を都度読むため、
  * このオブジェクト自体の参照は固定し、中身だけを書き換える（Object.assign）。
  * こうすることで GUI からの変更が全消費側に無改修で伝播する。
@@ -185,7 +191,11 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
 export function loadConfig(persisted: Partial<EditableConfig> | null): void {
   const resolved = {} as Record<EditableKey, unknown>;
   for (const key of EDITABLE_KEYS) {
-    const raw = envLockedKeys[key] ? RAW_ENV[key] : (persisted?.[key] ?? RAW_ENV[key]);
+    // env固定 or 非永続化キーはpersistedを無視し、常にenvのみを参照する（非永続化キーは起動ごとにリセットしたいため）。
+    const raw =
+      envLockedKeys[key] || NON_PERSISTED_KEYS.has(key)
+        ? RAW_ENV[key]
+        : (persisted?.[key] ?? RAW_ENV[key]);
     resolved[key] = normalizeEditable(key, raw);
   }
   Object.assign(config, resolved);
@@ -216,14 +226,16 @@ export function getConfigState(): ConfigState {
 }
 
 /**
- * 永続化すべき編集値（＝env固定でないキーの実効値）だけを返す。
+ * 永続化すべき編集値（＝env固定でも非永続化キーでもないキーの実効値）だけを返す。
  * env固定キーは書き込まない（applyEditable がスキップするのと対称。
  * env を外したとき、過去のenv値が settings.json に残って復帰しない事故を防ぐ）。
+ * 非永続化キー（NON_PERSISTED_KEYS）も書き込まない（起動時は常に空にリセットする）。
  */
 export function getPersistableValues(): Partial<EditableConfig> {
   const out: Record<string, unknown> = {};
   for (const key of EDITABLE_KEYS) {
-    if (!envLockedKeys[key]) out[key] = config[key];
+    if (envLockedKeys[key] || NON_PERSISTED_KEYS.has(key)) continue;
+    out[key] = config[key];
   }
   return out as Partial<EditableConfig>;
 }
