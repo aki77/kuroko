@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { CodeNote, Cue, Suggestion, WebNote } from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
 import { config } from "./config";
+import { buildGithubBlobUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url";
 
 /** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {
@@ -320,20 +321,47 @@ function toWeb(raw: unknown): WebNote[] {
 /**
  * 外部プロセス(claude)の出力を信頼しきらず、code部分を正規化する。
  * Cは欠けても致命的でないため、raw が無ければ空配列を返す。
+ * projectDir が GitHub リポジトリで ref が解決できたときだけ、ref を GitHub blob URL にして付与する。
  */
 function toCode(raw: unknown): CodeNote[] {
   if (!raw || typeof raw !== "object") return [];
   const o = raw as Record<string, unknown>;
-  return Array.isArray(o.code)
-    ? o.code
-        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
-        .map((c) => ({
-          title: typeof c.title === "string" ? c.title : "",
-          detail: typeof c.detail === "string" ? c.detail : "",
-          ...(typeof c.ref === "string" && c.ref ? { ref: c.ref } : {}),
-        }))
-        .filter((c) => c.title || c.detail)
-    : [];
+  if (!Array.isArray(o.code)) return [];
+
+  // resolveGitRepo は同一会議（同一 projectDir）中はキャッシュを返すため、
+  // 呼ぶたびに git を同期実行するわけではない
+  const projectDir = config.projectDir;
+  const repo = projectDir ? resolveGitRepo(projectDir) : null;
+
+  // isRefStale は repo.ref（同一呼び出し内で不変）しか見ないため、code アイテムごとに
+  // 呼び直さず一度だけ計算する。isPathDirty は item ごとに path が変わるため、
+  // 同じ path が複数 code アイテムに現れても git status の同期実行が1回で済むようメモ化する。
+  const isStale = repo && projectDir ? isRefStale(projectDir, repo.ref) : false;
+  const dirtyCache = new Map<string, boolean>();
+  const isDirtyMemoized = (dir: string, path: string): boolean => {
+    const cached = dirtyCache.get(path);
+    if (cached !== undefined) return cached;
+    const result = isPathDirty(dir, path);
+    dirtyCache.set(path, result);
+    return result;
+  };
+
+  return o.code
+    .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+    .map((c) => {
+      const ref = typeof c.ref === "string" && c.ref ? c.ref : undefined;
+      const url =
+        ref && repo && projectDir
+          ? buildGithubBlobUrl(ref, repo, projectDir, isDirtyMemoized, () => isStale)
+          : undefined;
+      return {
+        title: typeof c.title === "string" ? c.title : "",
+        detail: typeof c.detail === "string" ? c.detail : "",
+        ...(ref ? { ref } : {}),
+        ...(isHttpsUrl(url) ? { url } : {}),
+      };
+    })
+    .filter((c) => c.title || c.detail);
 }
 
 /**

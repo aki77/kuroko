@@ -38,6 +38,8 @@ export interface CodeNote {
   detail: string;
   /** 参照した実装の位置（例: "src/main/settings-store.ts:12"）。無い場合あり */
   ref?: string;
+  /** ref を解決した GitHub blob URL。GitHub リポジトリで ref が解決できたときだけメイン側で付与 */
+  url?: string;
 }
 
 /** レンダラに送る提案更新イベント */

@@ -258,23 +258,7 @@ function render(u) {
     for (const w of s.web) {
       const item = document.createElement("div");
       item.className = "web-item";
-      let title;
-      if (w.url) {
-        title = document.createElement("a");
-        title.className = "web-title web-link";
-        title.href = "#";
-        // ネイティブtitle属性はオーバーレイの背後に隠れるため自前ツールチップで表示
-        title.addEventListener("mouseenter", (e) => showTooltip(w.url, e));
-        title.addEventListener("mousemove", (e) => positionTooltip(e));
-        title.addEventListener("mouseleave", hideTooltip);
-        title.addEventListener("click", (e) => {
-          e.preventDefault();
-          api.openExternal(w.url);
-        });
-      } else {
-        title = document.createElement("div");
-        title.className = "web-title";
-      }
+      const title = createLinkableElement("web-title", "web-link", w.url);
       title.textContent = w.title;
       const detail = document.createElement("div");
       detail.className = "web-detail";
@@ -301,8 +285,7 @@ function render(u) {
       detail.textContent = c.detail;
       item.append(title, detail);
       if (c.ref) {
-        const ref = document.createElement("div");
-        ref.className = "code-ref";
+        const ref = createLinkableElement("code-ref", "code-link", c.url);
         ref.textContent = c.ref;
         item.appendChild(ref);
       }
@@ -351,4 +334,28 @@ function positionTooltip(e) {
 
 function hideTooltip() {
   el.urlTooltip.hidden = true;
+}
+
+/**
+ * url があれば自前ツールチップ(URL表示)付きの<a>を、無ければ<div>を作る。
+ * FROM THE WEB / FROM THE CODE の両方でリンク化ロジックを共通化するためのヘルパー。
+ * ネイティブtitle属性はオーバーレイの背後に隠れるため自前ツールチップで表示する。
+ */
+function createLinkableElement(baseClassName, linkClassName, url) {
+  if (!url) {
+    const div = document.createElement("div");
+    div.className = baseClassName;
+    return div;
+  }
+  const a = document.createElement("a");
+  a.className = `${baseClassName} ${linkClassName}`;
+  a.href = "#";
+  a.addEventListener("mouseenter", (e) => showTooltip(url, e));
+  a.addEventListener("mousemove", (e) => positionTooltip(e));
+  a.addEventListener("mouseleave", hideTooltip);
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    api.openExternal(url);
+  });
+  return a;
 }

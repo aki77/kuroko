@@ -344,6 +344,16 @@ body {
   opacity: 0.7;
   margin-top: 2px;
 }
+.code-item .code-link {
+  display: inline-block;
+  color: var(--code-accent);
+  opacity: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+.code-item .code-link:hover {
+  text-decoration: underline;
+}
 
 .footer {
   padding: 8px 14px;
