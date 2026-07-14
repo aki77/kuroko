@@ -27,7 +27,7 @@ const el = {
   historyUnseen: document.getElementById("historyUnseen"),
   urlTooltip: document.getElementById("urlTooltip"),
   projectDirInput: document.getElementById("projectDirInput"),
-  projectDirHistory: document.getElementById("projectDirHistory"),
+  projectDirSuggest: document.getElementById("projectDirSuggest"),
   projectDirLock: document.getElementById("projectDirLock"),
 };
 
@@ -125,26 +125,56 @@ function saveProjectDirHistory(list) {
   }
 }
 
-// history配列を受け取って<datalist>へ反映する（呼び出し側が既に持っている配列を渡し、再読み込みを避ける）
-function renderProjectDirHistoryOptions(history) {
-  el.projectDirHistory.replaceChildren();
-  for (const dir of history) {
-    const option = document.createElement("option");
-    option.value = dir;
-    el.projectDirHistory.appendChild(option);
+// Electronのオーバーレイはalways-on-topの透過ウィンドウのため、<datalist>のネイティブ
+// ポップアップが背後に隠れてクリックできない（URLツールチップと同じ問題、style.css参照）。
+// そのため候補は自前の<ul>にDOM描画し、絞り込み・表示/非表示・選択確定も自前で行う。
+let projectDirHistoryCache = [];
+
+function renderProjectDirSuggest(list) {
+  el.projectDirSuggest.replaceChildren();
+  for (const dir of list) {
+    const li = document.createElement("li");
+    li.textContent = dir;
+    // mousedownはblurより先に発火するため、確定前にドロップダウンが閉じるのを防げる
+    li.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      el.projectDirInput.value = dir;
+      commitProjectDir();
+      closeProjectDirSuggest();
+    });
+    el.projectDirSuggest.appendChild(li);
   }
 }
 
+function openProjectDirSuggest() {
+  const value = el.projectDirInput.value.trim();
+  const filtered = value
+    ? projectDirHistoryCache.filter((d) => d.includes(value))
+    : projectDirHistoryCache;
+  renderProjectDirSuggest(filtered);
+  el.projectDirSuggest.hidden = filtered.length === 0;
+}
+
+function closeProjectDirSuggest() {
+  el.projectDirSuggest.hidden = true;
+}
+
 function addProjectDirHistory(dir) {
-  const history = loadProjectDirHistory().filter((v) => v !== dir);
+  const history = projectDirHistoryCache.filter((v) => v !== dir);
   history.unshift(dir);
   const trimmed = history.slice(0, PROJECT_DIR_HISTORY_MAX);
   saveProjectDirHistory(trimmed);
-  renderProjectDirHistoryOptions(trimmed);
+  projectDirHistoryCache = trimmed;
+}
+
+function commitProjectDir() {
+  const value = el.projectDirInput.value.trim();
+  api.setConfig({ projectDir: value });
+  if (value) addProjectDirHistory(value);
 }
 
 async function initProjectDirInput() {
-  renderProjectDirHistoryOptions(loadProjectDirHistory());
+  projectDirHistoryCache = loadProjectDirHistory();
 
   const state = await api.getConfig();
   const locked = state.envLocked.projectDir === true;
@@ -154,17 +184,17 @@ async function initProjectDirInput() {
 
   if (locked) return; // env固定時は編集不可なので保存/履歴処理も不要
 
-  const commit = () => {
-    const value = el.projectDirInput.value.trim();
-    api.setConfig({ projectDir: value });
-    if (value) addProjectDirHistory(value);
-  };
-
-  el.projectDirInput.addEventListener("change", commit);
+  el.projectDirInput.addEventListener("input", openProjectDirSuggest);
+  el.projectDirInput.addEventListener("focus", openProjectDirSuggest);
+  el.projectDirInput.addEventListener("blur", closeProjectDirSuggest);
+  el.projectDirInput.addEventListener("change", commitProjectDir);
   el.projectDirInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      commit();
+      commitProjectDir();
+      closeProjectDirSuggest();
+    } else if (e.key === "Escape") {
+      closeProjectDirSuggest();
     }
   });
 }

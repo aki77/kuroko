@@ -26,13 +26,12 @@
         <span class="projectdir-icon" aria-hidden="true">📁</span>
         <input
           id="projectDirInput"
-          list="projectDirHistory"
           type="text"
           placeholder="参照プロジェクトのパス（任意）"
           autocomplete="off"
           spellcheck="false"
         />
-        <datalist id="projectDirHistory"></datalist>
+        <ul class="projectdir-suggest" id="projectDirSuggest" hidden></ul>
         <span class="projectdir-lock" id="projectDirLock" hidden title="KUROKO_PROJECT_DIRで固定中">🔒</span>
       </div>
 
