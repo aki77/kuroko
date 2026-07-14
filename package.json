@@ -2,7 +2,7 @@
   "name": "kuroko",
   "version": "0.1.0",
   "private": true,
-  "description": "Zoom文字起こしをリアルタイム監視し、会議中に補足情報や聞くべきことを提案するCluely風オーバーレイ",
+  "description": "文字起こしをリアルタイム監視し、会議中に補足情報や聞くべきことを提案するCluely風オーバーレイ",
   "main": "dist/main/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && pnpm run copy-renderer",

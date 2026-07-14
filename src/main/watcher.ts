@@ -6,7 +6,7 @@ import type { Cue } from "../shared/types";
 import { config } from "./config";
 
 /**
- * zoom-transcripts ディレクトリを監視し、「最新のjsonl = 進行中のミーティング」を
+ * 文字起こし用ディレクトリ（config.transcriptDir）を監視し、「最新のjsonl = 進行中のミーティング」を
  * 追跡する。ファイル内容が更新されるたびに、seqごとに最新revisionを採用した
  * 確定発話リストを 'cues' イベントで通知する。
  *

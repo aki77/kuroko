@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { config } from "./config";
 
 /**
- * 【開発用】過去のZoom文字起こしjsonlを実タイムスタンプに沿って再生し、
+ * 【開発用】過去の文字起こしjsonlを実タイムスタンプに沿って再生し、
  * transcriptDir内に仮の *-transcript.jsonl を1行ずつ追記していく。
  *
  * watcher.tsは「transcriptDir内でファイル名が最も大きい *-transcript.jsonl」を

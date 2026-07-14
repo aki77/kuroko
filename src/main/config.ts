@@ -5,7 +5,7 @@ import { EDITABLE_KEYS } from "../shared/types";
 
 /** GUI編集対象外（env専用）も含む全項目の既定値 */
 const DEFAULTS: Config = {
-  /** Zoom文字起こしjsonlが保存されるディレクトリ */
+  /** 文字起こしjsonlが保存されるディレクトリ */
   transcriptDir: join(homedir(), "zoom-transcripts"),
 
   /** claude -p を実行する専用の空作業ディレクトリ（CLAUDE.md自動探索を回避する） */
