@@ -2,7 +2,7 @@
 
 会議の文字起こしをリアルタイムに監視し、会議中に「今の話題の要約」「次に話すべきこと」「Web検索による背景知識」を、画面隅の半透明オーバーレイでさりげなく提案するツール。
 
-Cluely / [AI-Giziroku](https://zenn.dev/uguisu_blog/articles/d777bd252bab6b) / miyagawa の live-assistant に着想を得ています。裏側のLLMはサブスク契約の `claude -p`（sonnet）を使います。
+裏側のLLMはサブスク契約の `claude -p`（sonnet）を使います。
 
 ## 特徴
 
@@ -18,7 +18,7 @@ Cluely / [AI-Giziroku](https://zenn.dev/uguisu_blog/articles/d777bd252bab6b) / m
 - 会議の文字起こしが `~/zoom-transcripts/*.jsonl` にリアルタイム保存されていること
   （1行1JSON: `{seq, speaker, text, revision, ...}`、同一 `seq` が `revision` を上げながら
    訂正追記される形式に対応。この形式で書き出せれば供給元は問わない。
-   例: Zoom自分用メモの文字起こしを `zoom-notes-jsonl` などで変換）
+   例: Zoom自分用メモの文字起こしを [zoom-notes-jsonl](https://github.com/aki77/zoom-notes-jsonl) などで変換）
 
 ## セットアップ
 
@@ -108,3 +108,7 @@ renderer/      Cluely風の半透明パネルに3ブロック描画
 - 専用の空ディレクトリ（`~/.cache/kuroko/run`）で実行 → CLAUDE.md自動探索を回避
 - `--bare` はサブスク（OAuth）では使えない（`ANTHROPIC_API_KEY` を要求するため）
 - Web検索ありは高品質だが遅い（〜40秒）。速度優先なら `suggester.ts` の `--allowedTools WebSearch` を外す
+
+## 参考
+
+Cluely / [AI-Giziroku](https://zenn.dev/uguisu_blog/articles/d777bd252bab6b) / miyagawa の live-assistant に着想を得ています。
