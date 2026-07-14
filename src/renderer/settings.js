@@ -33,7 +33,7 @@ function applyState(state) {
     const badge = field.querySelector(".lock-badge");
     const value = state.values[key];
 
-    // 実効値を表示。myNameのundefinedは空文字に
+    // 実効値を表示。myNameのundefinedは空文字に。
     input.value = value == null ? "" : String(value);
 
     const locked = state.envLocked[key];
