@@ -3,11 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Cue, Suggestion, WebNote } from "../shared/types";
+import type { CodeNote, Cue, Suggestion, WebNote } from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
 import { config } from "./config";
 
-/** claude -p に渡す構造化出力スキーマ（A: 要約+questions のみ。WebSearchなしで速い） */
+/** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {
   type: "object",
   properties: {
@@ -19,8 +19,18 @@ const SUMMARY_SCHEMA = {
       description:
         "次に話すべきこと。相手が話しているなら聞くべきこと、本人が話しているなら続けて話すべきこと。1〜4個、なければ空配列",
     },
+    needsCode: {
+      type: "boolean",
+      description:
+        "今の議論が自プロジェクトの実装の詳細（仕様・挙動・データ構造）に関わっており、実装を確認すると議論が正確になる場合のみ true。一般的な話・実装に無関係な話なら false。",
+    },
+    codeQuery: {
+      type: "string",
+      description:
+        "needsCode が true のとき、実装で確認すべき事柄を簡潔に（例: 「設定の保存先と永続化形式」）。false のとき空文字。",
+    },
   },
-  required: ["topic", "discussion", "questions"],
+  required: ["topic", "discussion", "questions", "needsCode", "codeQuery"],
   additionalProperties: false,
 } as const;
 
@@ -50,6 +60,32 @@ const WEB_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** claude -p に渡す構造化出力スキーマ（C: 自プロジェクトの実装確認のみ。Read/Grep/Globを使うため遅い） */
+const CODE_SCHEMA = {
+  type: "object",
+  properties: {
+    code: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          detail: { type: "string" },
+          ref: {
+            type: "string",
+            description: "参照した実装の位置（例: \"src/main/settings-store.ts:12\"）。無ければ省略",
+          },
+        },
+        required: ["title", "detail"],
+        additionalProperties: false,
+      },
+      description: "会議で話している仕様・挙動を自プロジェクトの実装で裏付けた事実（0〜4個）",
+    },
+  },
+  required: ["code"],
+  additionalProperties: false,
+} as const;
+
 /**
  * A（要約+questions）用のシステムプロンプトを組み立てる。
  * myName が設定されている場合のみ、直近の発話主体（本人/相手）に応じて
@@ -66,6 +102,7 @@ function buildSummarySystemPrompt(myName?: string): string {
 以下を提供してください:
 1. topic / discussion: 今まさに話している話題と、その議論の簡潔な要約。
 ${questionsGuidance}
+3. needsCode / codeQuery: 今の議論が自プロジェクトの実装の詳細（仕様・挙動・データ構造）に関わっており、実装を確認すると議論が正確になる場合だけ needsCode を true にし、codeQuery に確認すべき事柄を簡潔に書く。一般的な話・実装に無関係な話なら needsCode は false、codeQuery は空文字。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 }
@@ -77,8 +114,16 @@ web: 会話に登場した専門用語・技術・製品・固有名詞のうち
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 
+const CODE_SYSTEM_PROMPT = `あなたは会議に同席するアシスタントです。
+Read/Grep/Globで自プロジェクトの実装を調べ、会議で話している仕様・挙動を実装の事実で裏付けます。
+
+code: 推測で埋めず、実際に読んだ内容だけを書く。各項目に参照位置(ファイル:行)を可能なら添える。0〜4個。
+
+日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
+
 export interface SuggestResult {
   suggestion: Suggestion;
+  /** 生成全体の壁時計時間(ms)。runClaudeの自己申告duration_msではなくDate.now()差分。C逐次区間・タイムアウトを含めるため */
   durationMs: number;
   costUsd: number;
 }
@@ -92,16 +137,18 @@ interface ClaudeJsonResult {
   structured_output?: unknown;
 }
 
-/** claude -p 1回の呼び出しを表すタスク定義。A/Bで差し替え可能な部分だけを引数化する */
+/** claude -p 1回の呼び出しを表すタスク定義。A/B/Cで差し替え可能な部分だけを引数化する */
 interface ClaudeTask {
   prompt: string;
   systemPrompt: string;
   schema: object;
   /** 空配列なら --allowedTools を付けない（ツールなし=速い） */
   allowedTools: string[];
-  /** 将来 A/B 別モデル化の拡張点（今は両方 config.model） */
+  /** 将来 A/B/C 別モデル化の拡張点（今は全て config.model） */
   model: string;
   timeoutMs: number;
+  /** cwd外の参照を許可する追加ディレクトリ（--add-dir）。Cで自プロジェクトを読ませるのに使う */
+  addDirs?: string[];
 }
 
 interface ClaudeRunResult {
@@ -110,26 +157,31 @@ interface ClaudeRunResult {
   costUsd: number;
 }
 
+/** B/Cが未実行・失敗したときのダミー結果（cost/duration 0）。A/B/Cを対称に扱うための共通フォールバック */
+const EMPTY_RESULT: ClaudeRunResult = { structured: undefined, durationMs: 0, costUsd: 0 };
+
 /**
  * 直近の発話と（あれば）前回の提案をClaudeに渡し、新しい提案を生成する。
  * 前回提案を渡すことで、話題が変わっていなければ既存内容を維持し、
  * 変化があった部分だけ更新するよう促す（miyagawa版のUPDATED/unchangedに相当）。
  *
- * 内部では性質の違う2プロセスに分割して並行実行する:
- *   A（速い・ツールなし）: topic + discussion + questions
- *   B（遅い・WebSearchあり）: web(WebNote[]) のみ
- * Bが失敗してもAだけで提案を返す（会議中に全滅しないため）。
+ * 内部では性質の違う複数プロセスに分割して実行する:
+ *   A（速い・ツールなし）: topic + discussion + questions + needsCode判定
+ *   B（遅い・WebSearchあり）: web(WebNote[]) のみ。Aと並行実行
+ *   C（遅い・Read/Grep/Globあり）: code(CodeNote[]) のみ。Aの判定(needsCode)に依存するため逐次実行
+ * B/Cが失敗・未実行でもAだけで提案を返す（会議中に全滅しないため）。
  */
 export async function generateSuggestion(
   cues: Cue[],
   previous: Suggestion | null,
 ): Promise<SuggestResult> {
   await mkdir(config.claudeCwd, { recursive: true });
+  const startedAt = Date.now();
 
   const recent = cues.slice(-config.recentCueLimit);
   const transcript = recent.map((c) => `${c.speaker}: ${c.text}`).join("\n");
 
-  // previousの一部だけを抜粋してプロンプトに埋め込む（A/Bそれぞれ入力を減らして速くする）。
+  // previousの一部だけを抜粋してプロンプトに埋め込む（A/B/Cそれぞれ入力を減らして速くする）。
   // previousが無ければ抜粋も無し
   const prevSection = (label: string, data: unknown): string =>
     previous
@@ -173,23 +225,46 @@ export async function generateSuggestion(
   if (summaryOutcome.status === "rejected") {
     throw summaryOutcome.reason;
   }
-  const summary = toSummary(summaryOutcome.value.structured);
+  const summaryRaw = summaryOutcome.value.structured;
+  const summary = toSummary(summaryRaw);
 
   // B（web）が失敗してもAだけで続行する（会議中に全滅しないための方針）。
-  // 空配列・cost/duration 0 のダミー結果にフォールバックし、以降はA/Bを対称に扱う
+  // 空配列・cost/duration 0 のダミー結果にフォールバックし、以降はA/B/Cを対称に扱う
   let webResult: ClaudeRunResult;
   if (webOutcome.status === "fulfilled") {
     webResult = webOutcome.value;
   } else {
     console.warn("web task failed:", webOutcome.reason);
-    webResult = { structured: undefined, durationMs: 0, costUsd: 0 };
+    webResult = EMPTY_RESULT;
   }
   const web = toWeb(webResult.structured);
 
+  // C（コード参照）はAの判定(needsCode)に依存する逐次実行。
+  // needsCodeがtrueかつprojectDirが設定済みのときだけ発火する（LLM判断駆動、無駄な探索を避ける）
+  const { needsCode, codeQuery } = toCodeDecision(summaryRaw);
+  let codeResult: ClaudeRunResult = EMPTY_RESULT;
+  if (needsCode && config.projectDir) {
+    const codeTask: ClaudeTask = {
+      ...baseTask,
+      prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
+      systemPrompt: CODE_SYSTEM_PROMPT,
+      schema: CODE_SCHEMA,
+      allowedTools: ["Read", "Grep", "Glob"],
+      timeoutMs: config.claudeCodeTimeoutSec * 1000,
+      addDirs: [config.projectDir],
+    };
+    try {
+      codeResult = await runClaude(codeTask);
+    } catch (err) {
+      console.warn("code task failed:", err);
+    }
+  }
+  const code = toCode(codeResult.structured);
+
   return {
-    suggestion: { ...summary, web },
-    durationMs: Math.max(summaryOutcome.value.durationMs, webResult.durationMs),
-    costUsd: summaryOutcome.value.costUsd + webResult.costUsd,
+    suggestion: { ...summary, web, code },
+    durationMs: Date.now() - startedAt,
+    costUsd: summaryOutcome.value.costUsd + webResult.costUsd + codeResult.costUsd,
   };
 }
 
@@ -197,8 +272,9 @@ export async function generateSuggestion(
  * 外部プロセス(claude)の出力を信頼しきらず、要約部分をSuggestionの形に正規化する。
  * CLIのバージョン変化や出力仕様変更で形が崩れても、下流(renderer)が壊れないようにする。
  * Aは必須のため、raw が無ければ throw する。
+ * needsCode/codeQuery はSuggestion型に含めない（内部の制御フローだけで使う）ため、ここでは読まない。
  */
-function toSummary(raw: unknown): Omit<Suggestion, "web"> {
+function toSummary(raw: unknown): Omit<Suggestion, "web" | "code"> {
   if (!raw || typeof raw !== "object") {
     throw new Error("claude returned no structured_output");
   }
@@ -209,6 +285,16 @@ function toSummary(raw: unknown): Omit<Suggestion, "web"> {
     questions: Array.isArray(o.questions)
       ? o.questions.filter((q): q is string => typeof q === "string")
       : [],
+  };
+}
+
+/** Aの生structured_outputから、C発火要否の判定フラグだけを別途読み取る */
+function toCodeDecision(raw: unknown): { needsCode: boolean; codeQuery: string } {
+  if (!raw || typeof raw !== "object") return { needsCode: false, codeQuery: "" };
+  const o = raw as Record<string, unknown>;
+  return {
+    needsCode: o.needsCode === true,
+    codeQuery: typeof o.codeQuery === "string" ? o.codeQuery : "",
   };
 }
 
@@ -228,6 +314,25 @@ function toWeb(raw: unknown): WebNote[] {
           ...(isHttpsUrl(w.url) ? { url: w.url } : {}),
         }))
         .filter((w) => w.title || w.detail)
+    : [];
+}
+
+/**
+ * 外部プロセス(claude)の出力を信頼しきらず、code部分を正規化する。
+ * Cは欠けても致命的でないため、raw が無ければ空配列を返す。
+ */
+function toCode(raw: unknown): CodeNote[] {
+  if (!raw || typeof raw !== "object") return [];
+  const o = raw as Record<string, unknown>;
+  return Array.isArray(o.code)
+    ? o.code
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+        .map((c) => ({
+          title: typeof c.title === "string" ? c.title : "",
+          detail: typeof c.detail === "string" ? c.detail : "",
+          ...(typeof c.ref === "string" && c.ref ? { ref: c.ref } : {}),
+        }))
+        .filter((c) => c.title || c.detail)
     : [];
 }
 
@@ -276,6 +381,11 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
       "--setting-sources",
       "",
     ];
+    if (task.addDirs?.length) {
+      // 空cwd（claudeCwd）を維持したまま、Cで自プロジェクトをRead/Grep/Glob参照させる。
+      // --setting-sources "" があるためaddDirsが実プロジェクトでもCLAUDE.md/hooks/MCPは読み込まれない
+      args.push("--add-dir", ...task.addDirs);
+    }
     if (task.allowedTools.length > 0) {
       args.push("--allowedTools", ...task.allowedTools);
     }

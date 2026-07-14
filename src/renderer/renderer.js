@@ -15,6 +15,8 @@ const el = {
   questions: document.getElementById("questions"),
   webBlock: document.getElementById("webBlock"),
   web: document.getElementById("web"),
+  codeBlock: document.getElementById("codeBlock"),
+  code: document.getElementById("code"),
   footer: document.getElementById("footer"),
   footerStatus: document.getElementById("footerStatus"),
   refreshBtn: document.getElementById("refreshBtn"),
@@ -181,6 +183,32 @@ function render(u) {
     el.webBlock.hidden = false;
   } else {
     el.webBlock.hidden = true;
+  }
+
+  // FROM THE CODE
+  el.code.replaceChildren();
+  if (Array.isArray(s.code) && s.code.length > 0) {
+    for (const c of s.code) {
+      const item = document.createElement("div");
+      item.className = "code-item";
+      const title = document.createElement("div");
+      title.className = "code-title";
+      title.textContent = c.title;
+      const detail = document.createElement("div");
+      detail.className = "code-detail";
+      detail.textContent = c.detail;
+      item.append(title, detail);
+      if (c.ref) {
+        const ref = document.createElement("div");
+        ref.className = "code-ref";
+        ref.textContent = c.ref;
+        item.appendChild(ref);
+      }
+      el.code.appendChild(item);
+    }
+    el.codeBlock.hidden = false;
+  } else {
+    el.codeBlock.hidden = true;
   }
 
   // フッター: 更新時刻 / 生成時間 / 累積コスト

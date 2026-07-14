@@ -18,6 +18,8 @@ export interface Suggestion {
   questions: string[];
   /** Web検索で補った背景知識（FROM THE WEB） */
   web: WebNote[];
+  /** 実装コードから確認した仕様(FROM THE CODE) */
+  code: CodeNote[];
 }
 
 export interface WebNote {
@@ -29,6 +31,15 @@ export interface WebNote {
   url?: string;
 }
 
+export interface CodeNote {
+  /** 補足の見出し（例: 「保存先は userData/settings.json」） */
+  title: string;
+  /** 実装から読み取った事実（1〜2文） */
+  detail: string;
+  /** 参照した実装の位置（例: "src/main/settings-store.ts:12"）。無い場合あり */
+  ref?: string;
+}
+
 /** レンダラに送る提案更新イベント */
 export interface SuggestionUpdate {
   suggestion: Suggestion;
@@ -36,7 +47,7 @@ export interface SuggestionUpdate {
   meetingFile: string;
   /** 生成完了時刻（ISO文字列。Date.now()回避のためメイン側で付与） */
   updatedAt: string;
-  /** この提案生成にかかったAPI時間(ms) */
+  /** この提案生成にかかった実時間(ms)。A/B並行・C逐次・タイムアウトを含む壁時計計測 */
   durationMs: number;
   /** 累積コスト(USD)。サブスクでは参考値 */
   cumulativeCostUsd: number;
@@ -61,12 +72,14 @@ export interface Config {
   debounceMs: number;
   claudeTimeoutSec: number;
   claudeWebTimeoutSec: number;
+  claudeCodeTimeoutSec: number;
   replayFile?: string;
   replaySpeed: number;
   replayMaxGapMs: number;
   replaySkipLines: number;
   myName?: string;
   contentProtection: boolean;
+  projectDir?: string;
 }
 
 /** GUIで編集可能なキー（この順序でフォームに並べる） */
@@ -78,7 +91,9 @@ export const EDITABLE_KEYS = [
   "debounceMs",
   "claudeTimeoutSec",
   "claudeWebTimeoutSec",
+  "claudeCodeTimeoutSec",
   "transcriptDir",
+  "projectDir",
   "contentProtection",
 ] as const;
 export type EditableKey = (typeof EDITABLE_KEYS)[number];

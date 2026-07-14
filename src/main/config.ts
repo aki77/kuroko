@@ -42,6 +42,9 @@ const DEFAULTS: Config = {
   /** web検索プロセス(B)のタイムアウト(秒)。検索往復があるためAより長め。 */
   claudeWebTimeoutSec: 90,
 
+  /** コード参照プロセス(C)のタイムアウト(秒)。Read/Grep/Globでの探索があるためAより長め。 */
+  claudeCodeTimeoutSec: 90,
+
   /** 【開発用】指定すると過去ログをリプレイする隠しモード。過去ログJSONLのフルパス */
   replayFile: undefined,
   /** リプレイ再生速度の倍率（10で10倍速）。start差分をこの値で割って待機する */
@@ -53,6 +56,14 @@ const DEFAULTS: Config = {
 
   /** 本人（ユーザー自身）の話者名。文字起こしの話者名（表示名）に合わせる。未設定なら本人識別なしで動く */
   myName: undefined,
+
+  /**
+   * 会議中に実装から仕様を確認する対象の自プロジェクトディレクトリ。
+   * 未設定ならコード参照プロセス(C)は一切走らない。
+   * claude -p の --add-dir に渡すだけで --setting-sources "" は維持するため、
+   * CLAUDE.md/hooks/MCPは読み込まれずRead/Grep/Globの読み取り専用参照になる。
+   */
+  projectDir: undefined,
 
   /** ★Cluelyの肝: ONでオーバーレイを画面共有・画面録画に映さない。デバッグ時のスクショ共有用にOFFへ切替え可能にする */
   contentProtection: true,
@@ -67,7 +78,9 @@ const RAW_ENV: Record<EditableKey, string | undefined> = {
   debounceMs: process.env.KUROKO_DEBOUNCE_MS,
   claudeTimeoutSec: process.env.KUROKO_CLAUDE_TIMEOUT_SEC,
   claudeWebTimeoutSec: process.env.KUROKO_CLAUDE_WEB_TIMEOUT_SEC,
+  claudeCodeTimeoutSec: process.env.KUROKO_CLAUDE_CODE_TIMEOUT_SEC,
   transcriptDir: process.env.KUROKO_TRANSCRIPT_DIR,
+  projectDir: process.env.KUROKO_PROJECT_DIR,
   contentProtection: process.env.KUROKO_CONTENT_PROTECTION,
 };
 
@@ -153,8 +166,12 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
       return normalizeNumber(raw, DEFAULTS.claudeTimeoutSec);
     case "claudeWebTimeoutSec":
       return normalizeNumber(raw, DEFAULTS.claudeWebTimeoutSec);
+    case "claudeCodeTimeoutSec":
+      return normalizeNumber(raw, DEFAULTS.claudeCodeTimeoutSec);
     case "transcriptDir":
       return normalizeString(raw, DEFAULTS.transcriptDir);
+    case "projectDir":
+      return normalizeOptionalName(raw);
     case "contentProtection":
       return normalizeBoolean(raw, DEFAULTS.contentProtection);
   }

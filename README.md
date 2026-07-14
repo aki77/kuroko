@@ -1,6 +1,6 @@
 # kuroko
 
-会議の文字起こしをリアルタイムに監視し、会議中に「今の話題の要約」「次に話すべきこと」「Web検索による背景知識」を、画面隅の半透明オーバーレイでさりげなく提案するツール。
+会議の文字起こしをリアルタイムに監視し、会議中に「今の話題の要約」「次に話すべきこと」「Web検索による背景知識」「実装コードから確認した仕様」を、画面隅の半透明オーバーレイでさりげなく提案するツール。
 
 裏側のLLMはサブスク契約の `claude -p`（sonnet）を使います。
 
@@ -9,8 +9,9 @@
 - **画面共有・録画に映らない**オーバーレイ（macOSの `NSWindowSharingNone` / Electron `setContentProtection`）
 - 常に最前面・半透明ガラスUI・全仮想デスクトップで表示
 - 新しい発言が一定数たまるたびに**自動で提案を更新**（手動トリガーも可）
-- `claude -p --json-schema` による構造化出力で、提案を3ブロック（話題/次に話すべきこと/FROM THE WEB）に整形
+- `claude -p --json-schema` による構造化出力で、提案を4ブロック（話題/次に話すべきこと/FROM THE WEB/FROM THE CODE）に整形
 - Web検索（`WebSearch`ツール）で会話中の専門用語を補足
+- 自プロジェクトの実装がテーマになったときだけ、Read/Grep/Globで実装を読んで仕様を裏付け（`参照プロジェクトディレクトリ` 設定時のみ。CLAUDE.md/hooks/MCPは読み込まない）
 
 ## 前提
 
@@ -52,11 +53,15 @@ pnpm start
 | `KUROKO_DEBOUNCE_MS` | `1500` | ✓ | 追記検知後のデバウンス |
 | `KUROKO_CLAUDE_TIMEOUT_SEC` | `60` | ✓ | 要約プロセス(A)のタイムアウト（秒） |
 | `KUROKO_CLAUDE_WEB_TIMEOUT_SEC` | `90` | ✓ | Web検索プロセス(B)のタイムアウト（秒） |
+| `KUROKO_CLAUDE_CODE_TIMEOUT_SEC` | `90` | ✓ | コード参照プロセス(C)のタイムアウト（秒） |
 | `KUROKO_TRANSCRIPT_DIR` | `~/zoom-transcripts` | ✓ | 文字起こしjsonlの保存先 |
+| `KUROKO_PROJECT_DIR` | （なし） | ✓ | 会議中に実装から仕様を確認する自プロジェクトのディレクトリ。未設定ならFROM THE CODEは無効 |
 | `KUROKO_CLAUDE_CWD` | `~/.cache/kuroko/run` | – | claude -p を実行する作業ディレクトリ |
 | `KUROKO_CLAUDE_BIN` | （PATH解決） | – | claude CLI の絶対パス |
 
 `KUROKO_MY_NAME` は文字起こしに出る自分の話者名（表示名）に合わせると精度が上がる（多少の表記ゆれはLLM側で吸収される）。
+
+`KUROKO_PROJECT_DIR` を設定すると、要約プロセス(A)が「今の議論が自プロジェクトの実装の詳細に関わる」と判断したときだけ、コード参照プロセス(C)がRead/Grep/Globで実装を調べてFROM THE CODEブロックに表示する。判断はA自身が構造化出力の `needsCode` フラグで行うため、毎回自動で実装を探索するわけではない。
 
 ## 開発用: リプレイモード（会議なしで動作検証）
 
@@ -96,10 +101,13 @@ watcher.ts     seqごと最新revisionを採用した確定発話リストを生
    ▼
 orchestrator.ts  発話がN件たまったらトリガー（多重起動防止・デバウンス）
    ▼
-suggester.ts   claude -p sonnet --json-schema --allowedTools WebSearch
-   │           （設定無効化 --setting-sources "" ＋ 空cwd で軽量・高速化）
+suggester.ts   A: claude -p sonnet --json-schema（要約+questions+needsCode判定）
+               B: claude -p sonnet --json-schema --allowedTools WebSearch（並行実行）
+               C: claude -p sonnet --json-schema --allowedTools Read Grep Glob
+                  （AがneedsCode=trueと判定したときだけ逐次発火。--add-dirで自プロジェクトを参照）
+   │           （設定無効化 --setting-sources "" ＋ 空cwd で軽量・高速化。Cもこの前提は維持）
    ▼ IPC
-renderer/      Cluely風の半透明パネルに3ブロック描画
+renderer/      Cluely風の半透明パネルに4ブロック描画
 ```
 
 ## メモ: `claude -p` のチューニング
@@ -108,6 +116,7 @@ renderer/      Cluely風の半透明パネルに3ブロック描画
 - 専用の空ディレクトリ（`~/.cache/kuroko/run`）で実行 → CLAUDE.md自動探索を回避
 - `--bare` はサブスク（OAuth）では使えない（`ANTHROPIC_API_KEY` を要求するため）
 - Web検索ありは高品質だが遅い（〜40秒）。速度優先なら `suggester.ts` の `--allowedTools WebSearch` を外す
+- `--setting-sources ""` を保ったまま `--add-dir` で実プロジェクトをRead/Grep/Glob参照させられる（CLAUDE.md/hooks/MCPは読み込まれない）。会議中に実装を「読むだけ」参照させたい場合に有効
 
 ## 参考
 
