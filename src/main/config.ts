@@ -36,11 +36,11 @@ const DEFAULTS: Config = {
    */
   debounceMs: 1500,
 
-  /** claude -p 呼び出しのタイムアウト(ms) */
-  claudeTimeoutMs: 60_000,
+  /** claude -p 呼び出しのタイムアウト(秒) */
+  claudeTimeoutSec: 60,
 
-  /** web検索プロセス(B)のタイムアウト(ms)。検索往復があるためAより長め。 */
-  claudeWebTimeoutMs: 90_000,
+  /** web検索プロセス(B)のタイムアウト(秒)。検索往復があるためAより長め。 */
+  claudeWebTimeoutSec: 90,
 
   /** 【開発用】指定すると過去ログをリプレイする隠しモード。過去ログJSONLのフルパス */
   replayFile: undefined,
@@ -62,8 +62,8 @@ const RAW_ENV: Record<EditableKey, string | undefined> = {
   triggerCueCount: process.env.KUROKO_TRIGGER_CUES,
   recentCueLimit: process.env.KUROKO_RECENT_LIMIT,
   debounceMs: process.env.KUROKO_DEBOUNCE_MS,
-  claudeTimeoutMs: process.env.KUROKO_CLAUDE_TIMEOUT_MS,
-  claudeWebTimeoutMs: process.env.KUROKO_CLAUDE_WEB_TIMEOUT_MS,
+  claudeTimeoutSec: process.env.KUROKO_CLAUDE_TIMEOUT_SEC,
+  claudeWebTimeoutSec: process.env.KUROKO_CLAUDE_WEB_TIMEOUT_SEC,
   transcriptDir: process.env.KUROKO_TRANSCRIPT_DIR,
 };
 
@@ -133,10 +133,10 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
       return normalizeNumber(raw, DEFAULTS.recentCueLimit);
     case "debounceMs":
       return normalizeNumber(raw, DEFAULTS.debounceMs, 0);
-    case "claudeTimeoutMs":
-      return normalizeNumber(raw, DEFAULTS.claudeTimeoutMs);
-    case "claudeWebTimeoutMs":
-      return normalizeNumber(raw, DEFAULTS.claudeWebTimeoutMs);
+    case "claudeTimeoutSec":
+      return normalizeNumber(raw, DEFAULTS.claudeTimeoutSec);
+    case "claudeWebTimeoutSec":
+      return normalizeNumber(raw, DEFAULTS.claudeWebTimeoutSec);
     case "transcriptDir":
       return normalizeString(raw, DEFAULTS.transcriptDir);
   }

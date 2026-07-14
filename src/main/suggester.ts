@@ -153,7 +153,7 @@ export async function generateSuggestion(
     systemPrompt: buildSummarySystemPrompt(config.myName),
     schema: SUMMARY_SCHEMA,
     allowedTools: [],
-    timeoutMs: config.claudeTimeoutMs,
+    timeoutMs: config.claudeTimeoutSec * 1000,
   };
   const webTask: ClaudeTask = {
     ...baseTask,
@@ -161,7 +161,7 @@ export async function generateSuggestion(
     systemPrompt: WEB_SYSTEM_PROMPT,
     schema: WEB_SCHEMA,
     allowedTools: ["WebSearch"],
-    timeoutMs: config.claudeWebTimeoutMs,
+    timeoutMs: config.claudeWebTimeoutSec * 1000,
   };
 
   const [summaryOutcome, webOutcome] = await Promise.allSettled([

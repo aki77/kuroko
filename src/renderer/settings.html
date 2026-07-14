@@ -52,16 +52,16 @@
           <span class="hint">追記検知からトリガー判定までの待機</span>
         </label>
 
-        <label class="field" data-key="claudeTimeoutMs">
-          <span class="label">要約タイムアウト (ms)</span>
-          <input type="number" name="claudeTimeoutMs" min="1" step="1000" />
+        <label class="field" data-key="claudeTimeoutSec">
+          <span class="label">要約タイムアウト (秒)</span>
+          <input type="number" name="claudeTimeoutSec" min="1" step="1" />
           <span class="lock-badge" hidden>envで固定中</span>
           <span class="hint">要約プロセス(A)のタイムアウト</span>
         </label>
 
-        <label class="field" data-key="claudeWebTimeoutMs">
-          <span class="label">Web検索タイムアウト (ms)</span>
-          <input type="number" name="claudeWebTimeoutMs" min="1" step="1000" />
+        <label class="field" data-key="claudeWebTimeoutSec">
+          <span class="label">Web検索タイムアウト (秒)</span>
+          <input type="number" name="claudeWebTimeoutSec" min="1" step="1" />
           <span class="lock-badge" hidden>envで固定中</span>
           <span class="hint">Web検索プロセス(B)のタイムアウト（Aより長め）</span>
         </label>

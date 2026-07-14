@@ -59,8 +59,8 @@ export interface Config {
   triggerCueCount: number;
   recentCueLimit: number;
   debounceMs: number;
-  claudeTimeoutMs: number;
-  claudeWebTimeoutMs: number;
+  claudeTimeoutSec: number;
+  claudeWebTimeoutSec: number;
   replayFile?: string;
   replaySpeed: number;
   replayMaxGapMs: number;
@@ -75,8 +75,8 @@ export const EDITABLE_KEYS = [
   "triggerCueCount",
   "recentCueLimit",
   "debounceMs",
-  "claudeTimeoutMs",
-  "claudeWebTimeoutMs",
+  "claudeTimeoutSec",
+  "claudeWebTimeoutSec",
   "transcriptDir",
 ] as const;
 export type EditableKey = (typeof EDITABLE_KEYS)[number];

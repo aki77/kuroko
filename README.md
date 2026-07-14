@@ -49,8 +49,8 @@ pnpm start
 | `KUROKO_TRIGGER_CUES` | `8` | ✓ | 自動提案する新規発話の閾値 |
 | `KUROKO_RECENT_LIMIT` | `40` | ✓ | Claudeに渡す直近発話数 |
 | `KUROKO_DEBOUNCE_MS` | `1500` | ✓ | 追記検知後のデバウンス |
-| `KUROKO_CLAUDE_TIMEOUT_MS` | `60000` | ✓ | 要約プロセス(A)のタイムアウト |
-| `KUROKO_CLAUDE_WEB_TIMEOUT_MS` | `90000` | ✓ | Web検索プロセス(B)のタイムアウト |
+| `KUROKO_CLAUDE_TIMEOUT_SEC` | `60` | ✓ | 要約プロセス(A)のタイムアウト（秒） |
+| `KUROKO_CLAUDE_WEB_TIMEOUT_SEC` | `90` | ✓ | Web検索プロセス(B)のタイムアウト（秒） |
 | `KUROKO_TRANSCRIPT_DIR` | `~/zoom-transcripts` | ✓ | 文字起こしjsonlの保存先 |
 | `KUROKO_CLAUDE_CWD` | `~/.cache/kuroko/run` | – | claude -p を実行する作業ディレクトリ |
 | `KUROKO_CLAUDE_BIN` | （PATH解決） | – | claude CLI の絶対パス |
