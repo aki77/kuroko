@@ -187,3 +187,20 @@ export function buildGithubBlobUrl(
 
   return endLine ? `${base}#L${startLine}-L${endLine}` : `${base}#L${startLine}`;
 }
+
+/**
+ * "path:11-12, 29-33, 16" のようなカンマ区切り複数範囲 ref から、先頭範囲より前だけを
+ * 残して buildGithubBlobUrl に委譲する薄いラッパー。パス検証・行番号パース・dirty/stale
+ * 判定は buildGithubBlobUrl 側の既存ロジックにすべて任せ、ここでは二重にパースしない。
+ * カンマがない ref（単一範囲・行番号なし・不正 ref）はそのまま渡す。
+ */
+export function buildGithubRefUrl(
+  rawRef: string,
+  repo: GitRepoInfo,
+  projectDir: string,
+  isDirty: (projectDir: string, path: string) => boolean = isPathDirty,
+  isStale: (projectDir: string, ref: string) => boolean = isRefStale,
+): string | null {
+  const firstRef = rawRef.split(",")[0].trimEnd(); // 例 "path:11-12, 29-33" -> "path:11-12"
+  return buildGithubBlobUrl(firstRef, repo, projectDir, isDirty, isStale);
+}

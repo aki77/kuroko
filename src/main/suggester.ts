@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { CodeNote, Cue, Suggestion, WebNote } from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
 import { config } from "./config";
-import { buildGithubBlobUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url";
+import { buildGithubRefUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url";
 
 /** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {
@@ -352,13 +352,13 @@ function toCode(raw: unknown): CodeNote[] {
       const ref = typeof c.ref === "string" && c.ref ? c.ref : undefined;
       const url =
         ref && repo && projectDir
-          ? buildGithubBlobUrl(ref, repo, projectDir, isDirtyMemoized, () => isStale)
-          : undefined;
+          ? buildGithubRefUrl(ref, repo, projectDir, isDirtyMemoized, () => isStale)
+          : null;
       return {
         title: typeof c.title === "string" ? c.title : "",
         detail: typeof c.detail === "string" ? c.detail : "",
         ...(ref ? { ref } : {}),
-        ...(isHttpsUrl(url) ? { url } : {}),
+        ...(url ? { url } : {}),
       };
     })
     .filter((c) => c.title || c.detail);

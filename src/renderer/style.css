@@ -337,17 +337,20 @@ body {
   line-height: 1.55;
   color: var(--fg-dim);
 }
+/* ref。プレーンテキスト表示時とリンク表示時の共通の枠。
+   dim は opacity ではなく color: var(--fg-dim)（--fg と同じRGBでアルファ0.6）で表現する
+   （FROM THE WEB の .web-detail 等と同じ設計）。opacity は継承されず親がサブツリーごと
+   合成するため、子要素の color/opacity で親の opacity を打ち消せない点に注意。 */
 .code-item .code-ref {
   font-size: 10.5px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   color: var(--fg-dim);
-  opacity: 0.7;
   margin-top: 2px;
 }
+/* リンク化できたときだけ accent 色で強調。単一要素カスケードで .code-ref の color を上書きする */
 .code-item .code-link {
   display: inline-block;
   color: var(--code-accent);
-  opacity: 1;
   text-decoration: none;
   cursor: pointer;
 }

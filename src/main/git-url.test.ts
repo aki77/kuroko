@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildGithubBlobUrl, isRefStale, parseGithubRemote, resolveGitRepo } from "./git-url.ts";
+import {
+  buildGithubBlobUrl,
+  buildGithubRefUrl,
+  isRefStale,
+  parseGithubRemote,
+  resolveGitRepo,
+} from "./git-url.ts";
 
 const repo = { owner: "aki77", repo: "kuroko", ref: "abc123" };
 const clean = () => false;
@@ -63,6 +69,67 @@ test("buildGithubBlobUrl: staleかつdirtyでも行番号を落としベースUR
   assert.equal(
     buildGithubBlobUrl("src/foo.ts:12", repo, "/x", dirty, stale),
     "https://github.com/aki77/kuroko/blob/abc123/src/foo.ts",
+  );
+});
+
+test("buildGithubRefUrl: カンマ区切り複数範囲 -> 先頭範囲のURL", () => {
+  assert.equal(
+    buildGithubRefUrl("app/models/review.rb:11-12, 29-33, 16", repo, "/x", clean, fresh),
+    "https://github.com/aki77/kuroko/blob/abc123/app/models/review.rb#L11-L12",
+  );
+});
+
+test("buildGithubRefUrl: 単一行番号ref -> 該当URL", () => {
+  assert.equal(
+    buildGithubRefUrl("src/foo.ts:12", repo, "/x", clean, fresh),
+    "https://github.com/aki77/kuroko/blob/abc123/src/foo.ts#L12",
+  );
+});
+
+test("buildGithubRefUrl: 単一範囲ref -> 該当URL", () => {
+  assert.equal(
+    buildGithubRefUrl("src/foo.ts:12-20", repo, "/x", clean, fresh),
+    "https://github.com/aki77/kuroko/blob/abc123/src/foo.ts#L12-L20",
+  );
+});
+
+test("buildGithubRefUrl: 行番号なしref -> ベースURL(行アンカーなし)", () => {
+  assert.equal(
+    buildGithubRefUrl("src/foo.ts", repo, "/x", clean, fresh),
+    "https://github.com/aki77/kuroko/blob/abc123/src/foo.ts",
+  );
+});
+
+test("buildGithubRefUrl: スペースなしカンマ区切りも先頭範囲を採用", () => {
+  assert.equal(
+    buildGithubRefUrl("a.ts:1,2", repo, "/x", clean, fresh),
+    "https://github.com/aki77/kuroko/blob/abc123/a.ts#L1",
+  );
+});
+
+test("buildGithubRefUrl: path側にコロン残り(不正ref) -> null", () => {
+  assert.equal(buildGithubRefUrl("a.ts:1:2, 3", repo, "/x", clean, fresh), null);
+});
+
+test("buildGithubRefUrl: 絶対パス -> null", () => {
+  assert.equal(buildGithubRefUrl("/etc/x:1, 2", repo, "/x", clean, fresh), null);
+});
+
+test("buildGithubRefUrl: '..'含み -> null", () => {
+  assert.equal(buildGithubRefUrl("../secret:1, 2", repo, "/x", clean, fresh), null);
+});
+
+test("buildGithubRefUrl: dirtyな対象pathは行番号を落としベースURLのみ", () => {
+  assert.equal(
+    buildGithubRefUrl("a.ts:1, 2", repo, "/x", dirty, fresh),
+    "https://github.com/aki77/kuroko/blob/abc123/a.ts",
+  );
+});
+
+test("buildGithubRefUrl: staleなら行番号を落としベースURLのみ", () => {
+  assert.equal(
+    buildGithubRefUrl("a.ts:1, 2", repo, "/x", clean, stale),
+    "https://github.com/aki77/kuroko/blob/abc123/a.ts",
   );
 });
 

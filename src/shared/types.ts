@@ -38,7 +38,11 @@ export interface CodeNote {
   detail: string;
   /** 参照した実装の位置（例: "src/main/settings-store.ts:12"）。無い場合あり */
   ref?: string;
-  /** ref を解決した GitHub blob URL。GitHub リポジトリで ref が解決できたときだけメイン側で付与 */
+  /**
+   * ref（先頭行範囲）を指す GitHub blob URL。GitHub リポジトリで解決できたときだけ
+   * メイン側で付与。未解決（非git/行番号なし/不正ref）なら省略され、レンダラは
+   * ref をプレーンテキスト表示する（WebNote.url と同じ「リンク化できるなら url」パターン）。
+   */
   url?: string;
 }
 
