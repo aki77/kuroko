@@ -65,6 +65,13 @@ const DEFAULTS: Config = {
    */
   projectDir: undefined,
 
+  /**
+   * その会議で話す予定のアジェンダ・議題資料などの事前コンテキスト。
+   * 会議ごとに異なるため永続化はせず、起動ごとに空へリセットする（projectDirと同じ扱い）。
+   * 提案生成プロセス A（要約）と C（コード参照）のプロンプトに埋め込む。B（Web検索）には渡さない。
+   */
+  meetingContext: undefined,
+
   /** ★Cluelyの肝: ONでオーバーレイを画面共有・画面録画に映さない。デバッグ時のスクショ共有用にOFFへ切替え可能にする */
   contentProtection: true,
 };
@@ -81,6 +88,7 @@ const RAW_ENV: Record<EditableKey, string | undefined> = {
   claudeCodeTimeoutSec: process.env.KUROKO_CLAUDE_CODE_TIMEOUT_SEC,
   transcriptDir: process.env.KUROKO_TRANSCRIPT_DIR,
   projectDir: process.env.KUROKO_PROJECT_DIR,
+  meetingContext: process.env.KUROKO_MEETING_CONTEXT,
   contentProtection: process.env.KUROKO_CONTENT_PROTECTION,
 };
 
@@ -95,9 +103,9 @@ const envLockedKeys: Record<EditableKey, boolean> = Object.fromEntries(
 
 /**
  * 常にsettings.jsonへ永続化しない（env固定時を除く）キーの集合。envLockedKeysと対称の仕組み。
- * projectDirは会議ごとに変わるため、起動ごとに空へリセットしたい（非永続化）。
+ * projectDir/meetingContextは会議ごとに変わるため、起動ごとに空へリセットしたい（非永続化）。
  */
-const NON_PERSISTED_KEYS = new Set<EditableKey>(["projectDir"]);
+const NON_PERSISTED_KEYS = new Set<EditableKey>(["projectDir", "meetingContext"]);
 
 /**
  * 消費側は `import { config } from "./config"` して `config.xxx` を都度読むため、
@@ -160,8 +168,6 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
   switch (key) {
     case "model":
       return normalizeString(raw, DEFAULTS.model);
-    case "myName":
-      return normalizeOptionalName(raw);
     case "triggerCueCount":
       return normalizeNumber(raw, DEFAULTS.triggerCueCount);
     case "recentCueLimit":
@@ -176,7 +182,10 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
       return normalizeNumber(raw, DEFAULTS.claudeCodeTimeoutSec);
     case "transcriptDir":
       return normalizeString(raw, DEFAULTS.transcriptDir);
+    // 自由記述の任意文字列（trimして空ならundefined）。追加時はここにcaseを足す
+    case "myName":
     case "projectDir":
+    case "meetingContext":
       return normalizeOptionalName(raw);
     case "contentProtection":
       return normalizeBoolean(raw, DEFAULTS.contentProtection);

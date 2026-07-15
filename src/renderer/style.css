@@ -138,10 +138,10 @@ body {
   opacity: 0.8;
 }
 
-.projectdir-row input {
+/* 参照プロジェクトパス入力とコンテキストtextareaで共有する入力欄スタイル。
+   透過ウィンドウのドラッグ領域から除外するため -webkit-app-region: no-drag を必ず持つ。 */
+.field-input {
   -webkit-app-region: no-drag;
-  flex: 1;
-  min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--glass-border);
   border-radius: 7px;
@@ -150,17 +150,22 @@ body {
   color: var(--fg);
   font-family: inherit;
 }
-.projectdir-row input:focus {
+.field-input:focus {
   outline: none;
   border-color: var(--accent);
   background: rgba(255, 255, 255, 0.1);
 }
-.projectdir-row input::placeholder {
+.field-input::placeholder {
   color: var(--fg-dim);
 }
-.projectdir-row input:disabled {
+.field-input:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.projectdir-row input {
+  flex: 1;
+  min-width: 0;
 }
 
 .projectdir-lock {
@@ -204,6 +209,103 @@ body {
 
 .projectdir-suggest li:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* 会議コンテキスト（アジェンダ・資料）の折りたたみパネル。普段は畳んでおき
+   常時表示のオーバーレイを圧迫しない（projectdir-row と同じ「常設・非永続化」パターン）。 */
+.context-row {
+  -webkit-app-region: no-drag;
+  padding: 0 14px 6px;
+}
+
+.context-toggle {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.context-toggle:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.context-badge {
+  font-size: 10px;
+  color: var(--code-accent);
+  background: rgba(199, 155, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.context-lock {
+  font-size: 11px;
+}
+
+.context-caret {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.context-row.open .context-caret {
+  transform: rotate(90deg);
+}
+
+.context-panel {
+  -webkit-app-region: no-drag;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+}
+.context-panel[hidden] {
+  display: none;
+}
+
+/* 共通の .field-input に textarea 固有の寸法・改行だけ足す */
+.context-panel textarea {
+  width: 100%;
+  min-height: 60px;
+  max-height: 160px;
+  resize: vertical;
+  padding: 6px 8px;
+  line-height: 1.5;
+}
+
+.context-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.context-file-btn {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.context-file-btn:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.1);
+}
+.context-file-btn[hidden] {
+  display: none;
 }
 
 /* 本文（スクロール領域）。下端をマスクでフェードしてスクロール可能を示す */

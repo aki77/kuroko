@@ -105,6 +105,8 @@ function buildSummarySystemPrompt(myName?: string): string {
 ${questionsGuidance}
 3. needsCode / codeQuery: 今の議論が自プロジェクトの実装の詳細（仕様・挙動・データ構造）に関わっており、実装を確認すると議論が正確になる場合だけ needsCode を true にし、codeQuery に確認すべき事柄を簡潔に書く。一般的な話・実装に無関係な話なら needsCode は false、codeQuery は空文字。
 
+事前コンテキスト（アジェンダ・資料）が与えられている場合は、topic/questions の判断にも活用すること。
+
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 }
 
@@ -121,6 +123,52 @@ Read/Grep/Globで自プロジェクトの実装を調べ、会議で話してい
 code: 推測で埋めず、実際に読んだ内容だけを書く。各項目に参照位置(ファイル:行)を可能なら添える。0〜4個。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
+
+/** claude -p に渡す構造化出力スキーマ（事前コンテキスト要約用）。長い資料を圧縮してmeetingContextとして保持する */
+const CONTEXT_SUMMARY_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: {
+      type: "string",
+      description:
+        "会議中の提案生成に使う事前コンテキスト。アジェンダ・論点・決定事項・関係者・専門用語を箇条書き中心に圧縮",
+    },
+  },
+  required: ["summary"],
+  additionalProperties: false,
+} as const;
+
+/** 事前コンテキスト要約用のシステムプロンプト（既存 buildSummarySystemPrompt と同じトーン） */
+const CONTEXT_SUMMARY_SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
+与えられたアジェンダ・議題資料を、会議中リアルタイム提案の事前コンテキストとして参照しやすい箇条書き中心の形に圧縮してください。
+
+論点・決定事項・関係者・固有名詞/専門用語・前提・数値は残し、冗長な地の文・重複は削ってください。
+日本語で簡潔に。`;
+
+/** 事前コンテキストがこの文字数を超えたら要約する。会議開始前/直後の初回1回だけ走るため低めに設定する */
+export const CONTEXT_SUMMARIZE_THRESHOLD = 2000;
+
+/**
+ * 会議ごとの事前コンテキスト（アジェンダ・資料）が長い場合に、claude -p で一度だけ要約する。
+ * generateSuggestion と同様、呼び出し前に claudeCwd を用意する。
+ */
+export async function summarizeMeetingContext(raw: string): Promise<string> {
+  await mkdir(config.claudeCwd, { recursive: true });
+  const task: ClaudeTask = {
+    prompt: raw,
+    systemPrompt: CONTEXT_SUMMARY_SYSTEM_PROMPT,
+    schema: CONTEXT_SUMMARY_SCHEMA,
+    allowedTools: [],
+    model: config.model,
+    timeoutMs: config.claudeTimeoutSec * 1000,
+  };
+  const result = await runClaude(task);
+  const o = result.structured as Record<string, unknown> | undefined;
+  if (!o || typeof o.summary !== "string") {
+    throw new Error("claude returned no structured_output for context summary");
+  }
+  return o.summary;
+}
 
 export interface SuggestResult {
   suggestion: Suggestion;
@@ -199,10 +247,17 @@ export async function generateSuggestion(
   };
   const prevWeb = previous && { web: previous.web };
 
+  // 会議ごとに事前登録されたアジェンダ・議題資料（非永続化・オーバーレイから都度設定）。
+  // A（要約）とC（コード参照）のプロンプト冒頭にだけ埋め込む。B（Web検索）には渡さない。
+  // 事前コンテキストは文脈の前提となるため、文字起こしより前（プロンプト冒頭）に置く。
+  const meetingContextSection = config.meetingContext
+    ? `【この会議の事前コンテキスト（アジェンダ・資料）】\n${config.meetingContext}\n\n`
+    : "";
+
   const baseTask = { model: config.model } as const;
   const summaryTask: ClaudeTask = {
     ...baseTask,
-    prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("提案", prevSummary)}`,
+    prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("提案", prevSummary)}`,
     systemPrompt: buildSummarySystemPrompt(config.myName),
     schema: SUMMARY_SCHEMA,
     allowedTools: [],
@@ -247,7 +302,7 @@ export async function generateSuggestion(
   if (needsCode && config.projectDir) {
     const codeTask: ClaudeTask = {
       ...baseTask,
-      prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
+      prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
       systemPrompt: CODE_SYSTEM_PROMPT,
       schema: CODE_SCHEMA,
       allowedTools: ["Read", "Grep", "Glob"],

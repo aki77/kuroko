@@ -6,6 +6,7 @@ import { applyEditable, config, getConfigState, getPersistableValues, loadConfig
 import { Orchestrator } from "./orchestrator";
 import { Replayer } from "./replayer";
 import { readSettings, writeSettings } from "./settings-store";
+import { CONTEXT_SUMMARIZE_THRESHOLD, summarizeMeetingContext } from "./suggester";
 
 let win: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
@@ -145,6 +146,38 @@ ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
     win?.setContentProtection(config.contentProtection);
   }
   return { ok: true, state: getConfigState() };
+});
+
+// 会議コンテキスト（アジェンダ・資料）確定時の要約IPC。
+// claude -p を挟む非同期処理（数十秒かかりうる）を config:set とは別経路にし、
+// 他の設定変更（即時同期）をブロックしないようにする。
+ipcMain.handle("context:summarize", async (_e, raw: unknown) => {
+  // env固定の二重防御（renderer側もlocked時は呼ばない想定だが、main側でも防ぐ）
+  if (getConfigState().envLocked.meetingContext === true) {
+    return { ok: true, summarized: false, state: getConfigState() };
+  }
+
+  // 空・閾値以下は原文をそのまま採用。閾値超過時だけ要約し、失敗したら原文へフォールバックする
+  // （切り詰めない＝会議情報の欠落を避け、失敗時もプロンプト肥大という既存同等の劣化に留める）。
+  // 分岐ごとにapplyEditable/returnを重複させず、value/summarized/errorを決めてから一度だけ確定する。
+  const text = typeof raw === "string" ? raw : "";
+  const trimmed = text.trim();
+  let value = text;
+  let summarized = false;
+  let error: string | undefined;
+
+  if (trimmed && trimmed.length > CONTEXT_SUMMARIZE_THRESHOLD) {
+    try {
+      value = await summarizeMeetingContext(text);
+      summarized = true;
+    } catch (err) {
+      console.warn("context summarize failed:", err);
+      error = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  applyEditable({ meetingContext: trimmed ? value : "" });
+  return { ok: true, summarized, state: getConfigState(), error };
 });
 
 app.whenReady().then(async () => {

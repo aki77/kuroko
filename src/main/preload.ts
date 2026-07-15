@@ -33,6 +33,11 @@ const api = {
   openSettings(): void {
     ipcRenderer.send("open-settings");
   },
+  summarizeContext(
+    raw: string,
+  ): Promise<{ ok: boolean; summarized: boolean; state: ConfigState; error?: string }> {
+    return ipcRenderer.invoke("context:summarize", raw);
+  },
 };
 
 contextBridge.exposeInMainWorld("kuroko", api);

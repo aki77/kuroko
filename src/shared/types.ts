@@ -86,6 +86,7 @@ export interface Config {
   myName?: string;
   contentProtection: boolean;
   projectDir?: string;
+  meetingContext?: string;
 }
 
 /** GUIで編集可能なキー（この順序でフォームに並べる） */
@@ -100,6 +101,7 @@ export const EDITABLE_KEYS = [
   "claudeCodeTimeoutSec",
   "transcriptDir",
   "projectDir",
+  "meetingContext",
   "contentProtection",
 ] as const;
 export type EditableKey = (typeof EDITABLE_KEYS)[number];
