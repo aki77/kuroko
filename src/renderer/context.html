@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KUROKO コンテキスト</title>
+    <link rel="stylesheet" href="context.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>会議コンテキスト</h1>
+      <p class="lead">
+        この会議のアジェンダ・議題資料を貼り付けてください。フォーカスを外すと自動で確定されます。<br />
+        長文は要約してから登録されます（起動ごとにリセットされ、保存はされません）。
+      </p>
+
+      <textarea
+        id="meetingContextInput"
+        class="context-textarea"
+        placeholder="この会議のアジェンダ・議題資料を貼り付け（任意）"
+        spellcheck="false"
+      ></textarea>
+
+      <div class="context-actions">
+        <label class="context-file-btn" id="meetingContextFileLabel">
+          📄 ファイルから読み込み
+          <input
+            id="meetingContextFile"
+            type="file"
+            accept=".md,.txt,.text,text/*"
+            hidden
+          />
+        </label>
+        <span class="context-status" id="contextStatus"></span>
+      </div>
+
+      <p class="context-lock-message" id="contextLockMessage" hidden>
+        🔒 KUROKO_MEETING_CONTEXT 環境変数で固定されているため編集できません。
+      </p>
+    </div>
+    <script src="context.js"></script>
+  </body>
+</html>

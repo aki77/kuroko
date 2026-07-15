@@ -29,14 +29,9 @@ const el = {
   projectDirInput: document.getElementById("projectDirInput"),
   projectDirSuggest: document.getElementById("projectDirSuggest"),
   projectDirLock: document.getElementById("projectDirLock"),
-  contextRow: document.getElementById("contextRow"),
-  contextToggle: document.getElementById("contextToggle"),
+  contextOpenBtn: document.getElementById("contextOpenBtn"),
   contextBadge: document.getElementById("contextBadge"),
   contextLock: document.getElementById("contextLock"),
-  contextPanel: document.getElementById("contextPanel"),
-  meetingContextInput: document.getElementById("meetingContextInput"),
-  meetingContextFile: document.getElementById("meetingContextFile"),
-  meetingContextFileLabel: document.getElementById("meetingContextFileLabel"),
 };
 
 // 同一会議中のみ保持する提案履歴
@@ -206,99 +201,28 @@ function initProjectDirInput(state) {
   });
 }
 
-// --- 会議コンテキスト（アジェンダ・資料）入力欄 ---
-// meetingContextはmain側で非永続化（起動ごとに空へリセット）。projectDirと違い長文かつ
-// 会議ごとに使い捨てのため、localStorage履歴は持たない。開閉状態だけUIの都合でlocalStorageに保存する。
-const CONTEXT_OPEN_KEY = "kuroko:contextOpen";
-
-function setContextOpen(open) {
-  el.contextRow.classList.toggle("open", open);
-  el.contextPanel.hidden = !open;
-  try {
-    localStorage.setItem(CONTEXT_OPEN_KEY, open ? "1" : "0");
-  } catch {
-    // localStorage不可時は開閉状態の保存を諦める（機能自体は継続）
-  }
-}
-
-function updateContextBadge() {
-  el.contextBadge.hidden = !el.meetingContextInput.value.trim();
-  el.contextBadge.textContent = "登録済み";
-}
-
-async function commitMeetingContext() {
-  // 要約中の連打対策。要約中はinputをdisabledにするので、それを唯一のロック状態として再commitを弾く
-  // （summarizeContextはclaude -pで数十秒かかりうる）。別フラグを持たず状態のソースを1つに保つ。
-  if (el.meetingContextInput.disabled) return;
-  const value = el.meetingContextInput.value;
-
-  el.contextBadge.hidden = false;
-  el.contextBadge.textContent = "要約中…";
-  el.meetingContextInput.disabled = true;
-  el.meetingContextFile.disabled = true;
-
-  try {
-    const res = await api.summarizeContext(value);
-    if (res.summarized) {
-      el.meetingContextInput.value = res.state.values.meetingContext || "";
-    }
-  } catch (err) {
-    console.warn("failed to summarize meeting context:", err);
-  } finally {
-    el.meetingContextInput.disabled = false;
-    el.meetingContextFile.disabled = false;
-    updateContextBadge();
-  }
-}
-
-function initMeetingContextInput(state) {
-  let initialOpen = false;
-  try {
-    initialOpen = localStorage.getItem(CONTEXT_OPEN_KEY) === "1";
-  } catch {
-    // localStorage不可時は畳んだ状態から始める
-  }
-
+// --- 会議コンテキスト（アジェンダ・資料）バッジ ---
+// 入力・確認UIは専用ウィンドウ（context.html）へ切り出し済み。オーバーレイ側は
+// 「登録済み」バッジ＋env固定🔒の表示と、専用ウィンドウを開くボタンだけを持つ。
+function updateContextBadge(state) {
   const locked = state.envLocked.meetingContext === true;
-  el.meetingContextInput.value = state.values.meetingContext || "";
-  el.meetingContextInput.disabled = locked;
+  el.contextBadge.hidden = !state.values.meetingContext?.trim();
   el.contextLock.hidden = !locked;
-  // env固定時はファイル読込ボタンも無効化する（textareaのdisabledと対称。押しても無反応な死んだUIを防ぐ）
-  el.meetingContextFileLabel.hidden = locked;
-  updateContextBadge();
-
-  // 開く理由が1つでもあれば開く: env固定中・既に内容がある・前回開いたまま
-  const hasValue = !!el.meetingContextInput.value.trim();
-  setContextOpen(locked || hasValue || initialOpen);
-
-  el.contextToggle.addEventListener("click", () => {
-    setContextOpen(el.contextPanel.hidden);
-  });
-
-  if (locked) return; // env固定時は編集不可なので保存/ファイル読込も不要
-
-  el.meetingContextInput.addEventListener("change", commitMeetingContext);
-
-  el.meetingContextFile.addEventListener("change", async () => {
-    const file = el.meetingContextFile.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      el.meetingContextInput.value = text;
-      await commitMeetingContext();
-    } catch (err) {
-      console.warn("failed to read meeting context file:", err);
-    } finally {
-      el.meetingContextFile.value = ""; // 同じファイルを連続選択しても change が発火するように
-    }
-  });
 }
 
-// projectDir/meetingContext の入力欄は同じConfigState（値＋envLocked）を使うため、
+function initContextBadge(state) {
+  updateContextBadge(state);
+  el.contextOpenBtn.addEventListener("click", () => api.openContext());
+}
+
+// push通知: 専用ウィンドウでの更新をオーバーレイのバッジへ即反映する
+api.onMeetingContextChanged((state) => updateContextBadge(state));
+
+// projectDir/meetingContext の初期表示は同じConfigState（値＋envLocked）を使うため、
 // getConfig()のIPCは1回だけ呼び、両initへ渡す（起動時の往復を減らす）。
 api.getConfig().then((state) => {
   initProjectDirInput(state);
-  initMeetingContextInput(state);
+  initContextBadge(state);
 });
 
 function resetHistory() {

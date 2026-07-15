@@ -10,6 +10,7 @@ import { CONTEXT_SUMMARIZE_THRESHOLD, summarizeMeetingContext } from "./suggeste
 
 let win: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
+let contextWin: BrowserWindow | null = null;
 let orchestrator: Orchestrator | null = null;
 let replayer: Replayer | null = null;
 let clickThrough = false;
@@ -75,6 +76,38 @@ function openSettingsWindow(): void {
   settingsWin.loadFile(join(__dirname, "..", "renderer", "settings.html"));
 }
 
+/**
+ * 会議コンテキスト（アジェンダ・資料）専用ウィンドウを開く。settingsWin/openSettingsWindow と同型。
+ * 長文の貼り付け・確認を行うため設定ウィンドウより広めのサイズにする。
+ */
+function openContextWindow(): void {
+  if (contextWin) {
+    contextWin.focus();
+    return;
+  }
+  contextWin = new BrowserWindow({
+    width: 560,
+    height: 640,
+    title: "KUROKO コンテキスト",
+    webPreferences: {
+      preload: join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  contextWin.on("closed", () => {
+    contextWin = null;
+  });
+  contextWin.loadFile(join(__dirname, "..", "renderer", "context.html"));
+}
+
+/** 開いている全ウィンドウへ同一イベントを送る。個別ハンドラでの送信先ベタ書きの増殖を防ぐ。 */
+function broadcast(channel: string, payload: unknown): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send(channel, payload);
+  }
+}
+
 async function wireOrchestrator(): Promise<void> {
   orchestrator = new Orchestrator();
   orchestrator.on("suggestion", (u: SuggestionUpdate) => {
@@ -130,6 +163,9 @@ ipcMain.on("open-external", (_e, url: unknown) => {
 // ⚙ボタンから設定ウィンドウを開く
 ipcMain.on("open-settings", () => openSettingsWindow());
 
+// オーバーレイの「コンテキスト」ボタンからコンテキスト専用ウィンドウを開く
+ipcMain.on("open-context", () => openContextWindow());
+
 // 設定ウィンドウ ↔ メインの往復（invoke/handle）
 ipcMain.handle("config:get", () => getConfigState());
 ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
@@ -153,8 +189,9 @@ ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
 // 他の設定変更（即時同期）をブロックしないようにする。
 ipcMain.handle("context:summarize", async (_e, raw: unknown) => {
   // env固定の二重防御（renderer側もlocked時は呼ばない想定だが、main側でも防ぐ）
-  if (getConfigState().envLocked.meetingContext === true) {
-    return { ok: true, summarized: false, state: getConfigState() };
+  const stateBefore = getConfigState();
+  if (stateBefore.envLocked.meetingContext === true) {
+    return { ok: true, summarized: false, state: stateBefore };
   }
 
   // 空・閾値以下は原文をそのまま採用。閾値超過時だけ要約し、失敗したら原文へフォールバックする
@@ -177,7 +214,9 @@ ipcMain.handle("context:summarize", async (_e, raw: unknown) => {
   }
 
   applyEditable({ meetingContext: trimmed ? value : "" });
-  return { ok: true, summarized, state: getConfigState(), error };
+  const state = getConfigState();
+  broadcast("meeting-context-changed", state);
+  return { ok: true, summarized, state, error };
 });
 
 app.whenReady().then(async () => {

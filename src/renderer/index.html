@@ -37,32 +37,12 @@
       </div>
 
       <div class="context-row" id="contextRow">
-        <button class="context-toggle" id="contextToggle" type="button">
+        <button class="context-open-btn" id="contextOpenBtn" type="button" title="コンテキストを編集">
           <span aria-hidden="true">📝</span>
           <span>コンテキスト</span>
           <span class="context-badge" id="contextBadge" hidden>登録済み</span>
           <span class="context-lock" id="contextLock" hidden title="KUROKO_MEETING_CONTEXTで固定中">🔒</span>
-          <span class="context-caret" id="contextCaret" aria-hidden="true">▸</span>
         </button>
-        <div class="context-panel" id="contextPanel" hidden>
-          <textarea
-            id="meetingContextInput"
-            class="field-input"
-            placeholder="この会議のアジェンダ・議題資料を貼り付け（任意）"
-            spellcheck="false"
-          ></textarea>
-          <div class="context-actions">
-            <label class="context-file-btn" id="meetingContextFileLabel">
-              📄 ファイルから読み込み
-              <input
-                id="meetingContextFile"
-                type="file"
-                accept=".md,.txt,.text,text/*"
-                hidden
-              />
-            </label>
-          </div>
-        </div>
       </div>
 
       <main class="content" id="content">

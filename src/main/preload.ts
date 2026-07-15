@@ -33,10 +33,16 @@ const api = {
   openSettings(): void {
     ipcRenderer.send("open-settings");
   },
+  openContext(): void {
+    ipcRenderer.send("open-context");
+  },
   summarizeContext(
     raw: string,
   ): Promise<{ ok: boolean; summarized: boolean; state: ConfigState; error?: string }> {
     return ipcRenderer.invoke("context:summarize", raw);
+  },
+  onMeetingContextChanged(cb: (state: ConfigState) => void): void {
+    ipcRenderer.on("meeting-context-changed", (_e, s: ConfigState) => cb(s));
   },
 };
 
