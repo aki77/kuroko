@@ -199,6 +199,13 @@ ipcMain.handle("context:summarize", async (_e, raw: unknown) => {
   // 分岐ごとにapplyEditable/returnを重複させず、value/summarized/errorを決めてから一度だけ確定する。
   const text = typeof raw === "string" ? raw : "";
   const trimmed = text.trim();
+
+  // 要約前に原文を先に確定させる。要約はclaude -pで最大60秒かかりうるが、
+  // このハンドラはコンテキストウィンドウのライフサイクルと独立に走り続けるため、
+  // 要約完了前にウィンドウを閉じても原文がconfigに残るようにし、
+  // 完了時に要約版で上書きする（クローズによる入力データ消失を防ぐ）。
+  applyEditable({ meetingContext: trimmed ? trimmed : "" });
+
   let value = text;
   let summarized = false;
   let error: string | undefined;
@@ -213,6 +220,7 @@ ipcMain.handle("context:summarize", async (_e, raw: unknown) => {
     }
   }
 
+  // 要約完了。要約版（または原文/失敗時フォールバック）で確定し直す。
   applyEditable({ meetingContext: trimmed ? value : "" });
   const state = getConfigState();
   broadcast("meeting-context-changed", state);
