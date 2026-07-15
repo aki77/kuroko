@@ -60,7 +60,7 @@ pnpm start
 | `KUROKO_DEBOUNCE_MS` | `1500` | ✓ | 追記検知後のデバウンス |
 | `KUROKO_CLAUDE_TIMEOUT_SEC` | `60` | ✓ | 要約プロセス(A)のタイムアウト（秒） |
 | `KUROKO_CLAUDE_WEB_TIMEOUT_SEC` | `90` | ✓ | Web検索プロセス(B)のタイムアウト（秒） |
-| `KUROKO_CLAUDE_CODE_TIMEOUT_SEC` | `90` | ✓ | コード参照プロセス(C)のタイムアウト（秒） |
+| `KUROKO_CLAUDE_CODE_TIMEOUT_SEC` | `180` | ✓ | コード参照プロセス(C)のタイムアウト（秒） |
 | `KUROKO_TRANSCRIPT_DIR` | `~/zoom-transcripts` | ✓ | 文字起こしjsonlの保存先 |
 | `KUROKO_PROJECT_DIR` | （なし） | ✓ | 会議中に実装から仕様を確認する自プロジェクトのディレクトリ。未設定ならFROM THE CODEは無効 |
 | `KUROKO_MEETING_CONTEXT` | （なし） | – | 会議のアジェンダ・議題資料（[会議コンテキスト](#会議コンテキストアジェンダ議題資料)参照）。非永続化のため設定ウィンドウの対象外だが、専用ウィンドウでの編集可否には同じ「envで固定中」ルールが適用される |

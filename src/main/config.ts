@@ -43,7 +43,7 @@ const DEFAULTS: Config = {
   claudeWebTimeoutSec: 90,
 
   /** コード参照プロセス(C)のタイムアウト(秒)。Read/Grep/Globでの探索があるためAより長め。 */
-  claudeCodeTimeoutSec: 90,
+  claudeCodeTimeoutSec: 180,
 
   /** 【開発用】指定すると過去ログをリプレイする隠しモード。過去ログJSONLのフルパス */
   replayFile: undefined,
