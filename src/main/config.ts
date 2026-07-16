@@ -12,7 +12,7 @@ const DEFAULTS: Config = {
   claudeCwd: join(homedir(), ".cache", "kuroko", "run"),
 
   /** 使用モデル */
-  model: "sonnet",
+  model: "haiku",
 
   /**
    * claude CLI の実行パス。Finder/Dockから起動するとログインシェルのPATHを

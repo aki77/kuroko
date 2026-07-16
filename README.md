@@ -2,7 +2,7 @@
 
 会議の文字起こしをリアルタイムに監視し、会議中に「今の話題の要約」「次に話すべきこと」「Web検索による背景知識」「実装コードから確認した仕様」を、画面隅の半透明オーバーレイでさりげなく提案するツール。
 
-裏側のLLMはサブスク契約の `claude -p`（sonnet）を使います。
+裏側のLLMはサブスク契約の `claude -p`（既定: haiku、`KUROKO_MODEL`で変更可）を使います。
 
 ## 特徴
 
@@ -55,7 +55,7 @@ pnpm start
 
 | 変数 | 既定値 | GUI | 説明 |
 | --- | --- | --- | --- |
-| `KUROKO_MODEL` | `sonnet` | ✓ | 使用モデル |
+| `KUROKO_MODEL` | `haiku` | ✓ | 使用モデル |
 | `KUROKO_FONT_SCALE` | `1.3` | ✓ | オーバーレイ文字サイズの倍率。小(`1.0`)/中(`1.3`)/大(`1.7`)のプリセット3択（自由入力不可・最も近い値にスナップ） |
 | `KUROKO_MY_NAME` | （なし） | ✓ | 本人の話者名。設定するとその人の発話には「続けて話すべきこと」を提案 |
 | `KUROKO_TRIGGER_CUES` | `8` | ✓ | 自動提案する新規発話の閾値 |
@@ -112,9 +112,10 @@ watcher.ts     seqごと最新revisionを採用した確定発話リストを生
    ▼
 orchestrator.ts  発話がN件たまったらトリガー（多重起動防止・デバウンス）
    ▼
-suggester.ts   A: claude -p sonnet --json-schema（要約+questions+needsCode判定）
-               B: claude -p sonnet --json-schema --allowedTools WebSearch（Aと同時に開始し、A/Cとは独立に並行実行）
-               C: claude -p sonnet --json-schema --allowedTools Read Grep Glob
+suggester.ts   A: claude -p <model> --json-schema（要約+questions+needsCode判定）
+               B: claude -p <model> --json-schema --allowedTools WebSearch（Aと同時に開始し、A/Cとは独立に並行実行）
+               C: claude -p <model> --json-schema --allowedTools Read Grep Glob
+                  （<model>は既定 haiku、KUROKO_MODELで変更可）
                   （Aの完了直後、AがneedsCode=trueと判定したときだけ発火。Bの完了は待たない。--add-dirで自プロジェクトを参照）
    │           （設定無効化 --setting-sources "" ＋ 空cwd で軽量・高速化。Cもこの前提は維持）
    │           （focusModeは生成開始時に1回だけ読み取り、同一提案内でB/Cに同じ値を使う。B/Cのプロンプト・スキーマではfocusMode=trueのとき最大件数を2件に絞る）
