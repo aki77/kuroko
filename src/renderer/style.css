@@ -18,6 +18,11 @@
   margin: 0;
 }
 
+/* 提案本文まわり（rem化した要素）のスケール基準。JSがここを書き換えてfontScaleを反映する */
+html {
+  font-size: 16px;
+}
+
 html,
 body {
   height: 100%;
@@ -84,6 +89,15 @@ body {
 .titlebar-actions button:hover {
   color: var(--fg);
   background: rgba(255, 255, 255, 0.08);
+}
+.titlebar-actions button.active {
+  color: var(--q-accent);
+  background: rgba(255, 207, 122, 0.12);
+}
+
+/* 情報量モードのトグルは絵文字+テキストのため、他のアイコン単独ボタンより小さめにする */
+#focusModeBtn {
+  font-size: 10px;
 }
 
 /* ステータスドット */
@@ -272,7 +286,7 @@ body {
 
 .empty {
   color: var(--fg-dim);
-  font-size: 13px;
+  font-size: 0.8125rem; /* 13px */
   line-height: 1.7;
   padding: 24px 4px;
   text-align: center;
@@ -290,14 +304,14 @@ body {
 }
 
 .block h1 {
-  font-size: 15px;
+  font-size: 0.9375rem; /* 15px */
   font-weight: 700;
   color: var(--accent);
   margin-bottom: 6px;
   line-height: 1.4;
 }
 .block h2 {
-  font-size: 10px;
+  font-size: 10px; /* 見出しラベルはシェル扱い。本文優先でスケール対象外 */
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -305,7 +319,7 @@ body {
   margin-bottom: 8px;
 }
 .topic-block p {
-  font-size: 13px;
+  font-size: 0.8125rem; /* 13px */
   line-height: 1.65;
   color: var(--fg);
 }
@@ -321,7 +335,7 @@ body {
   position: relative;
   padding-left: 20px;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem; /* 13px */
   line-height: 1.55;
 }
 #questions li::before {
@@ -343,7 +357,7 @@ body {
   border-left: 2px solid rgba(143, 224, 176, 0.35);
 }
 .web-item .web-title {
-  font-size: 12.5px;
+  font-size: 0.78125rem; /* 12.5px */
   font-weight: 600;
   color: var(--fg);
   margin-bottom: 2px;
@@ -358,7 +372,7 @@ body {
   text-decoration: underline;
 }
 .web-item .web-detail {
-  font-size: 12px;
+  font-size: 0.75rem; /* 12px */
   line-height: 1.55;
   color: var(--fg-dim);
 }
@@ -373,13 +387,13 @@ body {
   border-left: 2px solid rgba(199, 155, 255, 0.35);
 }
 .code-item .code-title {
-  font-size: 12.5px;
+  font-size: 0.78125rem; /* 12.5px */
   font-weight: 600;
   color: var(--fg);
   margin-bottom: 2px;
 }
 .code-item .code-detail {
-  font-size: 12px;
+  font-size: 0.75rem; /* 12px */
   line-height: 1.55;
   color: var(--fg-dim);
 }
@@ -388,7 +402,7 @@ body {
    （FROM THE WEB の .web-detail 等と同じ設計）。opacity は継承されず親がサブツリーごと
    合成するため、子要素の color/opacity で親の opacity を打ち消せない点に注意。 */
 .code-item .code-ref {
-  font-size: 10.5px;
+  font-size: 0.65625rem; /* 10.5px */
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   color: var(--fg-dim);
   margin-top: 2px;

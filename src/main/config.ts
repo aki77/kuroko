@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Config, ConfigState, EditableConfig, EditableKey } from "../shared/types";
-import { EDITABLE_KEYS } from "../shared/types";
+import { EDITABLE_KEYS, FONT_SCALE_PRESETS } from "../shared/types";
 
 /** GUI編集対象外（env専用）も含む全項目の既定値 */
 const DEFAULTS: Config = {
@@ -74,6 +74,12 @@ const DEFAULTS: Config = {
 
   /** ★Cluelyの肝: ONでオーバーレイを画面共有・画面録画に映さない。デバッグ時のスクショ共有用にOFFへ切替え可能にする */
   contentProtection: true,
+
+  /** オーバーレイ文字サイズ倍率。既定は「中」（現状比で一段大きい） */
+  fontScale: 1.3,
+
+  /** 情報量モード。既定はOFF（通常モード=ナビゲーター向けの現状ボリューム） */
+  focusMode: false,
 };
 
 /** env(KUROKO_*) の生の値。GUI編集対象キーのみ、envLockedキーの判定と正規化の入力に使う */
@@ -90,6 +96,7 @@ const RAW_ENV: Record<EditableKey, string | undefined> = {
   projectDir: process.env.KUROKO_PROJECT_DIR,
   meetingContext: process.env.KUROKO_MEETING_CONTEXT,
   contentProtection: process.env.KUROKO_CONTENT_PROTECTION,
+  fontScale: process.env.KUROKO_FONT_SCALE,
 };
 
 /**
@@ -151,6 +158,33 @@ function normalizeOptionalName(raw: unknown): string | undefined {
   return raw.trim() || undefined;
 }
 
+/**
+ * FONT_SCALE_PRESETSの中でnに最も近いvalueを持つ要素のindexを返す。
+ * snapToPreset（自由値のスナップ）が使う、プリセットスナップの唯一の実装。
+ */
+function closestFontScalePresetIndex(n: number): number {
+  let closest = 0;
+  let minDiff = Math.abs(n - FONT_SCALE_PRESETS[0].value);
+  for (let i = 1; i < FONT_SCALE_PRESETS.length; i++) {
+    const diff = Math.abs(n - FONT_SCALE_PRESETS[i].value);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = i;
+    }
+  }
+  return closest;
+}
+
+/**
+ * 値をFONT_SCALE_PRESETSの中で最も近いvalueにスナップする。自由入力を排し、
+ * envで範囲外・中間値が来ても3択のいずれかに収まるようにする。
+ */
+function snapToPreset(raw: unknown, fallback: number): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return FONT_SCALE_PRESETS[closestFontScalePresetIndex(n)].value;
+}
+
 /** boolean項目を正規化する。env由来の文字列("true"/"false")にも対応する */
 function normalizeBoolean(raw: unknown, fallback: boolean): boolean {
   if (typeof raw === "boolean") return raw; // GUI/JSON からの真偽値
@@ -189,6 +223,8 @@ function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeo
       return normalizeOptionalName(raw);
     case "contentProtection":
       return normalizeBoolean(raw, DEFAULTS.contentProtection);
+    case "fontScale":
+      return snapToPreset(raw, DEFAULTS.fontScale);
   }
 }
 
@@ -208,6 +244,15 @@ export function loadConfig(persisted: Partial<EditableConfig> | null): void {
     resolved[key] = normalizeEditable(key, raw);
   }
   Object.assign(config, resolved);
+}
+
+/**
+ * 集中モードを切り替える（メイン画面のオーバーレイボタン専用）。
+ * EDITABLE_KEYSに含まれないため、設定画面・env固定・永続化とは無関係。
+ * 呼び出し側（main.ts）でbroadcastを行う。
+ */
+export function setFocusMode(enabled: boolean): void {
+  config.focusMode = enabled === true;
 }
 
 /**

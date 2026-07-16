@@ -21,6 +21,7 @@ const el = {
   footerStatus: document.getElementById("footerStatus"),
   refreshBtn: document.getElementById("refreshBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
+  focusModeBtn: document.getElementById("focusModeBtn"),
   historyPrevBtn: document.getElementById("historyPrevBtn"),
   historyNextBtn: document.getElementById("historyNextBtn"),
   historyPosition: document.getElementById("historyPosition"),
@@ -39,12 +40,25 @@ let history = [];
 let cursor = -1; // history.length - 1 = 最新を表示中
 let hasUnseenLatest = false;
 
+// 情報量モード（集中／通常）。設定ウィンドウとも同期するためモジュールスコープで保持する
+let focusMode = false;
+
 el.refreshBtn.addEventListener("click", () => api.triggerNow());
 el.settingsBtn.addEventListener("click", () => api.openSettings());
+el.focusModeBtn.addEventListener("click", () => {
+  // 送信値はローカルの focusMode を即反転して予測する（連打時に古い値を送るのを防ぐ）。
+  // 表示同期は従来どおり onFocusModeChanged の push 通知（focus-mode-changed）に一本化する。
+  // push が届くと applyFocusMode が実効値で focusMode を上書きするため予測値と収束する。
+  // ここで .then(applyFocusMode) すると push と二重に発火し render が二度走るため呼ばない。
+  focusMode = !focusMode;
+  api.setFocusMode(focusMode);
+});
 el.historyPrevBtn.addEventListener("click", () => goToHistory(cursor - 1));
 el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
 el.historyUnseen.addEventListener("click", () => goToHistory(history.length - 1));
 
+// ⌘系ショートカットはウィンドウローカル（オーバーレイにフォーカスがある時だけ効く）にまとめる。
+// 現状は履歴ナビ（⌘⇧←/→）専用。
 document.addEventListener("keydown", (e) => {
   if (!e.metaKey || !e.shiftKey) return;
   if (e.key === "ArrowLeft") {
@@ -218,12 +232,34 @@ function initContextBadge(state) {
 // push通知: 専用ウィンドウでの更新をオーバーレイのバッジへ即反映する
 api.onMeetingContextChanged((state) => updateContextBadge(state));
 
+// --- 文字サイズ（fontScale） ---
+function applyFontScale(scale) {
+  document.documentElement.style.fontSize = `${16 * scale}px`;
+}
+
+// --- 情報量モード（focusMode） ---
+// 集中モードのときもFROM THE WEB/CODEブロックは非表示にしない（生成段階で最大2件に絞られる。
+// 「集中モードのときは見れて候補2つまで」= 表示は残す方針）。表示件数はrender側では絞らないため、
+// 既存の表示中の提案を再描画する必要もない。ボタン表示の同期のみ行う。
+function applyFocusMode(enabled) {
+  focusMode = enabled === true;
+  el.focusModeBtn.textContent = focusMode ? "🎯 集中" : "📋 通常";
+  el.focusModeBtn.classList.toggle("active", focusMode);
+}
+
+// push通知: 設定ウィンドウでの変更をオーバーレイのボタン表示へ即反映する
+api.onFocusModeChanged((enabled) => applyFocusMode(enabled));
+api.onFontScaleChanged((scale) => applyFontScale(scale));
+
 // projectDir/meetingContext の初期表示は同じConfigState（値＋envLocked）を使うため、
 // getConfig()のIPCは1回だけ呼び、両initへ渡す（起動時の往復を減らす）。
 api.getConfig().then((state) => {
   initProjectDirInput(state);
   initContextBadge(state);
+  applyFontScale(state.values.fontScale);
 });
+// 集中モードは非永続化（メイン画面ボタン専用）のため、起動時は常にOFFから開始する
+applyFocusMode(false);
 
 function resetHistory() {
   history = [];

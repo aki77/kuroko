@@ -13,6 +13,12 @@ const saveStatus = document.getElementById("saveStatus");
 
 let saveTimer = null;
 
+// push通知: オーバーレイ側での変更を設定ウィンドウへ即反映する。
+// env固定中でも表示同期はしてよい（値は実効値なので整合する）。
+// getConfig()の往復完了より前に登録することで、初回ロード中のbroadcastを取りこぼさない
+// （renderer.js側の同期登録→getConfigで初期値適用、という順序と揃える）。
+api.onFontScaleChanged((scale) => applyPushedValue("fontScale", scale));
+
 init();
 
 async function init() {
@@ -25,20 +31,49 @@ async function init() {
   });
 }
 
+/**
+ * push通知（単一値）でフォームの該当フィールドだけを書き換える。
+ * applyState はフォーム全体を ConfigState から再構築する前提のため、
+ * 単一値のpushには流用できず、1フィールド分の反映処理（applyValueToInput）だけを共有する。
+ */
+function applyPushedValue(key, value) {
+  const field = form.querySelector(`.field[data-key="${key}"]`);
+  if (!field) return;
+  applyValueToInput(field.querySelector("input, select"), value);
+}
+
+/**
+ * 1個のinput/selectへ値を反映する。checkbox/select/その他の3分岐は
+ * applyState（フォーム全体再構築）と applyPushedValue（単一値push）の両方から共通で使う。
+ */
+function applyValueToInput(input, value) {
+  if (input.type === "checkbox") {
+    input.checked = value === true;
+  } else if (input.tagName === "SELECT") {
+    selectMatchingOption(input, value);
+  } else {
+    // 実効値を表示。値がundefinedの場合は空文字に。
+    input.value = value == null ? "" : String(value);
+  }
+}
+
+/**
+ * option.valueは文字列なので、String(value)の書式ズレ（例: String(1.0)==="1"で
+ * option value="1.0"と不一致になりselectedIndex=-1になる）を避けて数値比較で選択する。
+ */
+function selectMatchingOption(select, value) {
+  const match = [...select.options].find((opt) => Number(opt.value) === Number(value));
+  select.value = match ? match.value : "";
+}
+
 /** ConfigState を受け取りフォームへ反映する（初期化・保存後の上書き共通） */
 function applyState(state) {
   for (const field of form.querySelectorAll(".field")) {
     const key = field.dataset.key;
-    const input = field.querySelector("input");
+    const input = field.querySelector("input, select");
     const badge = field.querySelector(".lock-badge");
-    const value = state.values[key];
 
-    if (input.type === "checkbox") {
-      input.checked = value === true;
-    } else {
-      // 実効値を表示。myNameのundefinedは空文字に。
-      input.value = value == null ? "" : String(value);
-    }
+    applyValueToInput(input, state.values[key]);
 
     const locked = state.envLocked[key];
     input.disabled = locked;
@@ -54,7 +89,7 @@ async function save() {
   const payload = {};
   for (const field of form.querySelectorAll(".field")) {
     const key = field.dataset.key;
-    const input = field.querySelector("input");
+    const input = field.querySelector("input, select");
     if (input.disabled) continue; // env固定キーは送らない
 
     if (input.type === "checkbox") {
@@ -68,6 +103,10 @@ async function save() {
         return;
       }
       payload[key] = Math.trunc(n);
+    } else if (input.tagName === "SELECT") {
+      // fontScaleのプリセットは数値。mainのnormalizeEditable(snapToPreset)側でも数値変換するが、
+      // 文字列のまま送るとGUI再表示のString(value)比較がズレないよう明示的にNumber化する
+      payload[key] = Number(input.value);
     } else {
       payload[key] = input.value;
     }

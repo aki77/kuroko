@@ -22,6 +22,18 @@
           <span class="hint">claude -p に渡すモデル名（例: sonnet, opus）</span>
         </label>
 
+        <label class="field" data-key="fontScale">
+          <span class="label">文字サイズ</span>
+          <!-- 値はFONT_SCALE_PRESETS（src/shared/types.ts）が唯一の情報源。変更時は両方直すこと -->
+          <select name="fontScale">
+            <option value="1.0">小</option>
+            <option value="1.3">中</option>
+            <option value="1.7">大</option>
+          </select>
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">オーバーレイの文字サイズ</span>
+        </label>
+
         <label class="field" data-key="myName">
           <span class="label">自分の話者名</span>
           <input type="text" name="myName" autocomplete="off" spellcheck="false" />

@@ -44,6 +44,16 @@ const api = {
   onMeetingContextChanged(cb: (state: ConfigState) => void): void {
     ipcRenderer.on("meeting-context-changed", (_e, s: ConfigState) => cb(s));
   },
+  onFontScaleChanged(cb: (scale: number) => void): void {
+    ipcRenderer.on("font-scale-changed", (_e, scale: number) => cb(scale));
+  },
+  onFocusModeChanged(cb: (enabled: boolean) => void): void {
+    ipcRenderer.on("focus-mode-changed", (_e, enabled: boolean) => cb(enabled));
+  },
+  // オーバーレイの集中モードボタン専用（設定画面/envとは無関係・非永続化）
+  setFocusMode(enabled: boolean): void {
+    ipcRenderer.send("focus-mode:set", enabled);
+  },
 };
 
 contextBridge.exposeInMainWorld("kuroko", api);

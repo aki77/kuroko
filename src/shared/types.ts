@@ -67,6 +67,16 @@ export type Status =
   | { kind: "error"; message: string }
   | { kind: "no-meeting" };
 
+/**
+ * オーバーレイ文字サイズのプリセット3択。settings.htmlのoption値・⌘+/⌘-の段階送り双方が
+ * ここを唯一の情報源として参照する（値を変える場合は settings.html の option も合わせて直すこと）。
+ */
+export const FONT_SCALE_PRESETS = [
+  { label: "小", value: 1.0 },
+  { label: "中", value: 1.3 },
+  { label: "大", value: 1.7 },
+] as const;
+
 /** アプリ全体の設定。値は config.ts が env > 保存済みJSON > 既定値の優先順位で解決する */
 export interface Config {
   transcriptDir: string;
@@ -87,11 +97,20 @@ export interface Config {
   contentProtection: boolean;
   projectDir?: string;
   meetingContext?: string;
+  /** オーバーレイ文字サイズの倍率。FONT_SCALE_PRESETSのvalueのいずれかにスナップされる */
+  fontScale: number;
+  /**
+   * 集中モード（true=ON）。ONのときWEB/CODEの提案件数を生成段階で最大2件に絞る。
+   * メイン画面のオーバーレイボタン専用（EDITABLE_KEYSに含めない＝設定画面/env固定/永続化の対象外）。
+   * アプリ起動時は常にfalseにリセットされる。
+   */
+  focusMode: boolean;
 }
 
 /** GUIで編集可能なキー（この順序でフォームに並べる） */
 export const EDITABLE_KEYS = [
   "model",
+  "fontScale",
   "myName",
   "triggerCueCount",
   "recentCueLimit",

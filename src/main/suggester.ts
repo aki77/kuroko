@@ -35,57 +35,73 @@ const SUMMARY_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-/** claude -p に渡す構造化出力スキーマ（B: web のみ。WebSearchを使うため遅い） */
-const WEB_SCHEMA = {
-  type: "object",
-  properties: {
-    web: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          title: { type: "string" },
-          detail: { type: "string" },
-          url: {
-            type: "string",
-            description: "参照した出典ページの完全なURL（https）。無ければ省略",
+/**
+ * claude -p に渡す構造化出力スキーマ（B: web のみ。WebSearchを使うため遅い）。
+ * 集中モード時はmaxItemsも2に絞る（プロンプト指示が主、これは二重防御）。
+ */
+function buildWebSchema(focusMode: boolean) {
+  return {
+    type: "object",
+    properties: {
+      web: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            detail: { type: "string" },
+            url: {
+              type: "string",
+              description: "参照した出典ページの完全なURL（https）。無ければ省略",
+            },
           },
+          required: ["title", "detail"],
+          additionalProperties: false,
         },
-        required: ["title", "detail"],
-        additionalProperties: false,
+        ...(focusMode ? { maxItems: 2 } : {}),
+        description: focusMode
+          ? "会話に出た用語・技術・固有名詞のうち最も重要なものだけ、Web検索で補った背景知識（0〜2個）"
+          : "会話に出た用語・技術・固有名詞をWeb検索で補った背景知識（0〜4個）",
       },
-      description: "会話に出た用語・技術・固有名詞をWeb検索で補った背景知識（0〜4個）",
     },
-  },
-  required: ["web"],
-  additionalProperties: false,
-} as const;
+    required: ["web"],
+    additionalProperties: false,
+  } as const;
+}
 
-/** claude -p に渡す構造化出力スキーマ（C: 自プロジェクトの実装確認のみ。Read/Grep/Globを使うため遅い） */
-const CODE_SCHEMA = {
-  type: "object",
-  properties: {
-    code: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          title: { type: "string" },
-          detail: { type: "string" },
-          ref: {
-            type: "string",
-            description: "参照した実装の位置（例: \"src/main/settings-store.ts:12\"）。無ければ省略",
+/**
+ * claude -p に渡す構造化出力スキーマ（C: 自プロジェクトの実装確認のみ。Read/Grep/Globを使うため遅い）。
+ * 集中モード時はmaxItemsも2に絞る（プロンプト指示が主、これは二重防御）。
+ */
+function buildCodeSchema(focusMode: boolean) {
+  return {
+    type: "object",
+    properties: {
+      code: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            detail: { type: "string" },
+            ref: {
+              type: "string",
+              description: "参照した実装の位置（例: \"src/main/settings-store.ts:12\"）。無ければ省略",
+            },
           },
+          required: ["title", "detail"],
+          additionalProperties: false,
         },
-        required: ["title", "detail"],
-        additionalProperties: false,
+        ...(focusMode ? { maxItems: 2 } : {}),
+        description: focusMode
+          ? "会議で話している仕様・挙動のうち最も重要なものだけを自プロジェクトの実装で裏付けた事実（0〜2個）"
+          : "会議で話している仕様・挙動を自プロジェクトの実装で裏付けた事実（0〜4個）",
       },
-      description: "会議で話している仕様・挙動を自プロジェクトの実装で裏付けた事実（0〜4個）",
     },
-  },
-  required: ["code"],
-  additionalProperties: false,
-} as const;
+    required: ["code"],
+    additionalProperties: false,
+  } as const;
+}
 
 /**
  * A（要約+questions）用のシステムプロンプトを組み立てる。
@@ -110,19 +126,33 @@ ${questionsGuidance}
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 }
 
-const WEB_SYSTEM_PROMPT = `あなたはオンライン会議に同席する優秀なアシスタントです。
+/**
+ * 集中モード（メインで話すとき）は情報過多を避けるため、WEB/CODEとも件数を生成段階で
+ * 最大2件に絞る。通常モード（ナビゲーター）は現状どおり0〜4件。
+ */
+function focusModeGuidance(focusMode: boolean): string {
+  return focusMode
+    ? "今は集中モードです。最も重要なものだけを最大2件に厳選してください（無ければ0件）。"
+    : "0〜4個。";
+}
+
+function buildWebSystemPrompt(focusMode: boolean): string {
+  return `あなたはオンライン会議に同席する優秀なアシスタントです。
 進行中の会議の文字起こしを読み、参加者の議論を深める背景知識をWeb検索で調べて返します。
 
-web: 会話に登場した専門用語・技術・製品・固有名詞のうち、背景知識があると議論が深まるものをWeb検索で調べて簡潔に補足する。一般常識レベルのものは含めない。0〜4個。各項目に参照元URLを可能な限り添える。
+web: 会話に登場した専門用語・技術・製品・固有名詞のうち、背景知識があると議論が深まるものをWeb検索で調べて簡潔に補足する。一般常識レベルのものは含めない。${focusModeGuidance(focusMode)}各項目に参照元URLを可能な限り添える。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
+}
 
-const CODE_SYSTEM_PROMPT = `あなたは会議に同席するアシスタントです。
+function buildCodeSystemPrompt(focusMode: boolean): string {
+  return `あなたは会議に同席するアシスタントです。
 Read/Grep/Globで自プロジェクトの実装を調べ、会議で話している仕様・挙動を実装の事実で裏付けます。
 
-code: 推測で埋めず、実際に読んだ内容だけを書く。各項目に参照位置(ファイル:行)を可能なら添える。0〜4個。
+code: 推測で埋めず、実際に読んだ内容だけを書く。各項目に参照位置(ファイル:行)を可能なら添える。${focusModeGuidance(focusMode)}
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
+}
 
 /** claude -p に渡す構造化出力スキーマ（事前コンテキスト要約用）。長い資料を圧縮してmeetingContextとして保持する */
 const CONTEXT_SUMMARY_SCHEMA = {
@@ -266,8 +296,8 @@ export async function generateSuggestion(
   const webTask: ClaudeTask = {
     ...baseTask,
     prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("補足", prevWeb)}`,
-    systemPrompt: WEB_SYSTEM_PROMPT,
-    schema: WEB_SCHEMA,
+    systemPrompt: buildWebSystemPrompt(config.focusMode),
+    schema: buildWebSchema(config.focusMode),
     allowedTools: ["WebSearch"],
     timeoutMs: config.claudeWebTimeoutSec * 1000,
   };
@@ -303,8 +333,8 @@ export async function generateSuggestion(
     const codeTask: ClaudeTask = {
       ...baseTask,
       prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
-      systemPrompt: CODE_SYSTEM_PROMPT,
-      schema: CODE_SCHEMA,
+      systemPrompt: buildCodeSystemPrompt(config.focusMode),
+      schema: buildCodeSchema(config.focusMode),
       allowedTools: ["Read", "Grep", "Glob"],
       timeoutMs: config.claudeCodeTimeoutSec * 1000,
       addDirs: [config.projectDir],

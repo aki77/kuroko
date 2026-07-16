@@ -2,7 +2,14 @@ import { join } from "node:path";
 import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } from "electron";
 import type { EditableConfig, Status, SuggestionUpdate } from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
-import { applyEditable, config, getConfigState, getPersistableValues, loadConfig } from "./config";
+import {
+  applyEditable,
+  config,
+  getConfigState,
+  getPersistableValues,
+  loadConfig,
+  setFocusMode,
+} from "./config";
 import { Orchestrator } from "./orchestrator";
 import { Replayer } from "./replayer";
 import { readSettings, writeSettings } from "./settings-store";
@@ -169,19 +176,33 @@ ipcMain.on("open-context", () => openContextWindow());
 // 設定ウィンドウ ↔ メインの往復（invoke/handle）
 ipcMain.handle("config:get", () => getConfigState());
 ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
-  const before = config.transcriptDir;
-  const contentProtectionBefore = config.contentProtection;
+  const before = {
+    transcriptDir: config.transcriptDir,
+    contentProtection: config.contentProtection,
+    fontScale: config.fontScale,
+  };
   applyEditable(next); // env固定キーは無視され、正規化された実効値がconfigに反映される
   writeSettings(getPersistableValues()); // env固定でないキーの実効値（クランプ後）だけを永続化する
   // transcriptDir が変わったときだけ watcher を再起動する（それ以外は即反映で足りる）
-  if (config.transcriptDir !== before) {
+  if (config.transcriptDir !== before.transcriptDir) {
     await orchestrator?.restartWatcher();
   }
   // content protectionが変わったときだけ実行中のオーバーレイへ即反映する（再起動不要にするため）
-  if (config.contentProtection !== contentProtectionBefore) {
+  if (config.contentProtection !== before.contentProtection) {
     win?.setContentProtection(config.contentProtection);
   }
+  // fontScaleが変わったときだけオーバーレイへ即反映する
+  if (config.fontScale !== before.fontScale) {
+    broadcast("font-scale-changed", config.fontScale);
+  }
   return { ok: true, state: getConfigState() };
+});
+
+// オーバーレイの集中モードボタン専用（設定画面/envとは無関係・非永続化）。
+// env固定という概念自体が無いため、押せば必ず効く。
+ipcMain.on("focus-mode:set", (_e, enabled: boolean) => {
+  setFocusMode(enabled);
+  broadcast("focus-mode-changed", config.focusMode);
 });
 
 // 会議コンテキスト（アジェンダ・資料）確定時の要約IPC。
