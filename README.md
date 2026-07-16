@@ -113,11 +113,11 @@ watcher.ts     seqごと最新revisionを採用した確定発話リストを生
 orchestrator.ts  発話がN件たまったらトリガー（多重起動防止・デバウンス）
    ▼
 suggester.ts   A: claude -p sonnet --json-schema（要約+questions+needsCode判定）
-               B: claude -p sonnet --json-schema --allowedTools WebSearch（並行実行）
+               B: claude -p sonnet --json-schema --allowedTools WebSearch（Aと同時に開始し、A/Cとは独立に並行実行）
                C: claude -p sonnet --json-schema --allowedTools Read Grep Glob
-                  （AがneedsCode=trueと判定したときだけ逐次発火。--add-dirで自プロジェクトを参照）
+                  （Aの完了直後、AがneedsCode=trueと判定したときだけ発火。Bの完了は待たない。--add-dirで自プロジェクトを参照）
    │           （設定無効化 --setting-sources "" ＋ 空cwd で軽量・高速化。Cもこの前提は維持）
-   │           （focusMode=trueのときB/Cのプロンプト・スキーマで最大件数を2件に絞る）
+   │           （focusModeは生成開始時に1回だけ読み取り、同一提案内でB/Cに同じ値を使う。B/Cのプロンプト・スキーマではfocusMode=trueのとき最大件数を2件に絞る）
    ▼ IPC
 renderer/      Cluely風の半透明パネルに4ブロック描画
 ```

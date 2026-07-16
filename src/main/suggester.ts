@@ -284,6 +284,15 @@ export async function generateSuggestion(
     ? `【この会議の事前コンテキスト（アジェンダ・資料）】\n${config.meetingContext}\n\n`
     : "";
 
+  // 集中モードは生成冒頭で1回だけキャプチャする。config.focusMode は setFocusMode() により
+  // IPC 経由で生成中にも非同期に書き換わりうるミュータブルなシングルトンのため、
+  // B/Cの読み取りタイミングを分けると同一提案内でモードが食い違う（B=切替前・C=切替後）。
+  // 1回の生成の間はこのローカル変数で固定し、config.focusMode を以降直接参照しない。
+  // 他のconfigフィールド（model/myName/projectDir/timeout類）も原理上は同じ非一貫性リスクを持つが、
+  // UIから会議中に動的トグルされるのは現状focusModeだけのため今回はfocusModeのみ固定する。
+  // 将来これらも動的変更可能になったら同様にスナップショット対象へ加えること。
+  const focusMode = config.focusMode;
+
   const baseTask = { model: config.model } as const;
   const summaryTask: ClaudeTask = {
     ...baseTask,
@@ -296,23 +305,61 @@ export async function generateSuggestion(
   const webTask: ClaudeTask = {
     ...baseTask,
     prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("補足", prevWeb)}`,
-    systemPrompt: buildWebSystemPrompt(config.focusMode),
-    schema: buildWebSchema(config.focusMode),
+    systemPrompt: buildWebSystemPrompt(focusMode),
+    schema: buildWebSchema(focusMode),
     allowedTools: ["WebSearch"],
     timeoutMs: config.claudeWebTimeoutSec * 1000,
   };
 
-  const [summaryOutcome, webOutcome] = await Promise.allSettled([
-    runClaude(summaryTask),
-    runClaude(webTask),
-  ]);
+  // 真の依存関係は A→C（CはAのneedsCode/codeQueryにのみ依存）、B はA/Cと独立。
+  // Bチェーンはここで走らせて await せず保持しておく（A+Cチェーンと並行実行させるため）。
+  const webPromise = runClaude(webTask);
+
+  // A+Cチェーン: Aを待ってからneedsCode判定し、必要な場合だけCを待つ。Bの完了を待たない。
+  // generateSuggestion内のローカル変数（transcript/previous/focusMode等）をクロージャで
+  // そのまま参照するためIIFEにしている（名前付き関数に外出しすると引数受け渡しが増えるだけ）。
+  const acChain = (async () => {
+    const summaryResult = await runClaude(summaryTask);
+    const summaryRaw = summaryResult.structured;
+    const summary = toSummary(summaryRaw);
+
+    // C（コード参照）はAの判定(needsCode)に依存する逐次実行。
+    // needsCodeがtrueかつprojectDirが設定済みのときだけ発火する（LLM判断駆動、無駄な探索を避ける）
+    const { needsCode, codeQuery } = toCodeDecision(summaryRaw);
+    let codeResult: ClaudeRunResult = EMPTY_RESULT;
+    if (needsCode && config.projectDir) {
+      const codeTask: ClaudeTask = {
+        ...baseTask,
+        prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
+        systemPrompt: buildCodeSystemPrompt(focusMode),
+        schema: buildCodeSchema(focusMode),
+        allowedTools: ["Read", "Grep", "Glob"],
+        timeoutMs: config.claudeCodeTimeoutSec * 1000,
+        addDirs: [config.projectDir],
+      };
+      try {
+        codeResult = await runClaude(codeTask);
+      } catch (err) {
+        console.warn("code task failed:", err);
+      }
+    }
+
+    // costは生値のまま返し、最終合算はA/B/C対称に呼び出し側1箇所で行う
+    return {
+      summary,
+      code: toCode(codeResult.structured),
+      summaryCostUsd: summaryResult.costUsd,
+      codeCostUsd: codeResult.costUsd,
+    };
+  })();
+
+  const [acOutcome, webOutcome] = await Promise.allSettled([acChain, webPromise]);
 
   // A（要約）が失敗したら提案自体を出せないためthrowする（従来の全体失敗と同じ挙動）
-  if (summaryOutcome.status === "rejected") {
-    throw summaryOutcome.reason;
+  if (acOutcome.status === "rejected") {
+    throw acOutcome.reason;
   }
-  const summaryRaw = summaryOutcome.value.structured;
-  const summary = toSummary(summaryRaw);
+  const { summary, code, summaryCostUsd, codeCostUsd } = acOutcome.value;
 
   // B（web）が失敗してもAだけで続行する（会議中に全滅しないための方針）。
   // 空配列・cost/duration 0 のダミー結果にフォールバックし、以降はA/B/Cを対称に扱う
@@ -325,32 +372,10 @@ export async function generateSuggestion(
   }
   const web = toWeb(webResult.structured);
 
-  // C（コード参照）はAの判定(needsCode)に依存する逐次実行。
-  // needsCodeがtrueかつprojectDirが設定済みのときだけ発火する（LLM判断駆動、無駄な探索を避ける）
-  const { needsCode, codeQuery } = toCodeDecision(summaryRaw);
-  let codeResult: ClaudeRunResult = EMPTY_RESULT;
-  if (needsCode && config.projectDir) {
-    const codeTask: ClaudeTask = {
-      ...baseTask,
-      prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
-      systemPrompt: buildCodeSystemPrompt(config.focusMode),
-      schema: buildCodeSchema(config.focusMode),
-      allowedTools: ["Read", "Grep", "Glob"],
-      timeoutMs: config.claudeCodeTimeoutSec * 1000,
-      addDirs: [config.projectDir],
-    };
-    try {
-      codeResult = await runClaude(codeTask);
-    } catch (err) {
-      console.warn("code task failed:", err);
-    }
-  }
-  const code = toCode(codeResult.structured);
-
   return {
     suggestion: { ...summary, web, code },
     durationMs: Date.now() - startedAt,
-    costUsd: summaryOutcome.value.costUsd + webResult.costUsd + codeResult.costUsd,
+    costUsd: summaryCostUsd + codeCostUsd + webResult.costUsd,
   };
 }
 
