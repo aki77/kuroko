@@ -7,6 +7,7 @@ import type { CodeNote, Cue, Suggestion, SuggestionPartial, WebNote } from "../s
 import { isHttpsUrl } from "../shared/url";
 import { config } from "./config";
 import { buildGithubRefUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url";
+import { findUnreachableUrls } from "./url-check";
 
 /** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {
@@ -382,7 +383,7 @@ export async function generateSuggestion(
     console.warn("web task failed:", webOutcome.reason);
     webResult = EMPTY_RESULT;
   }
-  const web = toWeb(webResult.structured);
+  const web = await verifyWebUrls(toWeb(webResult.structured));
 
   return {
     suggestion: { ...summary, web, code },
@@ -438,6 +439,37 @@ function toWeb(raw: unknown): WebNote[] {
         }))
         .filter((w) => w.title || w.detail)
     : [];
+}
+
+/**
+ * toWebで正規化した後のWebNote群について、各urlの到達確認(HEAD/GETフォールバック)を行い、
+ * 404/410（明示的に「無い」）と判定されたurlだけを落とす。title/detailは残す。
+ * ネットワークエラー・タイムアウト・403/429/5xxなどは「疑わしきは残す」ため、ここでは触らない。
+ * urlが1件も無ければ到達確認自体をスキップする（Bが未実行・失敗しtoWebが[]を返すケースを含む）。
+ * 到達確認の機構自体が失敗した場合（例: fetch非対応環境）は、提案全体を落とさず全urlを剥がして残す。
+ */
+async function verifyWebUrls(notes: WebNote[]): Promise<WebNote[]> {
+  const urls = notes
+    .filter((n): n is WebNote & { url: string } => !!n.url)
+    .map((n) => n.url);
+  if (urls.length === 0) return notes;
+  let unreachable: Set<string>;
+  try {
+    // タイムアウトは指定せずurl-check.tsのデフォルト(DEFAULT_URL_CHECK_TIMEOUT_MS)に委ねる（値の二重管理を避ける）
+    unreachable = await findUnreachableUrls(urls);
+  } catch (err) {
+    // 到達確認の機構自体が失敗（例: fetch非対応環境）。B失敗時と同じく提案は落とさず、
+    // 「疑わしきはurlを出さない・本文は残す」既存ポリシーに倒して全urlを剥がす。
+    console.warn("verifyWebUrls failed, dropping urls:", err);
+    return notes.map(({ url: _url, ...rest }) => rest);
+  }
+  return notes.map((n) => {
+    if (n.url && unreachable.has(n.url)) {
+      const { url, ...rest } = n;
+      return rest;
+    }
+    return n;
+  });
 }
 
 /**
