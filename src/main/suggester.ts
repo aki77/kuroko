@@ -562,6 +562,12 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
       // user/project/local の設定を全無効化（CLAUDE.md/hooks/MCPの影響排除・警告抑止）
       "--setting-sources",
       "",
+      // verbose を強制無効化。ユーザーが verbose 設定（~/.claude.json の "verbose": true）を
+      // 有効にしていると --output-format json が単一オブジェクトでなくイベント配列を返し、
+      // structured_output が読めなくなる。~/.claude.json は設定ソース外の状態ファイルのため
+      // --setting-sources "" では防げず、ここで明示的に上書きする
+      "--settings",
+      '{"verbose":false}',
     ];
     if (task.addDirs?.length) {
       // 空cwd（claudeCwd）を維持したまま、Cで自プロジェクトをRead/Grep/Glob参照させる。
