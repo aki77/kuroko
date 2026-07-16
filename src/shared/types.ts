@@ -46,6 +46,19 @@ export interface CodeNote {
   url?: string;
 }
 
+/** 提案生成の部分結果（A/B/Cそれぞれの完了時に随時レンダラへ流す） */
+export type SuggestionPartial =
+  | { kind: "summary"; data: Pick<Suggestion, "topic" | "discussion" | "questions"> }
+  | { kind: "web"; data: WebNote[] }
+  | { kind: "code"; data: CodeNote[] };
+
+/** レンダラに送る提案の部分更新イベント */
+export interface SuggestionPartUpdate {
+  part: SuggestionPartial;
+  /** 生成に使ったミーティング（jsonl）ファイル名。ライブ枠の会議一致判定に使う */
+  meetingFile: string;
+}
+
 /** レンダラに送る提案更新イベント */
 export interface SuggestionUpdate {
   suggestion: Suggestion;

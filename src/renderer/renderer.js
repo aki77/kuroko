@@ -40,6 +40,19 @@ let history = [];
 let cursor = -1; // history.length - 1 = 最新を表示中
 let hasUnseenLatest = false;
 
+// ライブ枠: 生成中のA/B/C部分結果を随時マージ描画するための一時バッファ。
+// 完成品はhistoryへ1件pushして確定するが、生成途中の値はhistoryに残したくないため
+// （キャンセル・破棄されうる未確定値をナビゲーション対象の履歴に混ぜないため）historyとは別に持つ。
+// 完成品(onSuggestion)が届いたらクリアする。meetingFileはliveDraft自身に持たせ、
+// 「バッファなし」と「対象会議なし」を別々の変数で二重管理しない。
+// 各パート(summary/web/code)は「まだ届いていない」ことを表すため既定値をundefinedにする
+// （空配列[]等の実データと区別するため。goToHistoryで最新復帰時、届いたパートだけを完成品へ上書きする）。
+function createLiveDraft(meetingFile) {
+  return { meetingFile, summary: undefined, web: undefined, code: undefined };
+}
+
+let liveDraft = null;
+
 // 情報量モード（集中／通常）。設定ウィンドウとも同期するためモジュールスコープで保持する
 let focusMode = false;
 
@@ -93,6 +106,9 @@ api.onStatus((s) => {
     case "error":
       el.statusDot.classList.add("error");
       el.statusLine.textContent = `エラー: ${truncate(s.message, 80)}`;
+      // このラウンドは失敗し suggestion（完成品）が来ないため liveDraft は不確定値のまま残る。
+      // クリアしないと次ラウンドの部分結果とミックスされる（旧ラウンドのweb/code + 新ラウンドのtopic等）
+      liveDraft = null;
       break;
   }
 });
@@ -106,6 +122,9 @@ api.onSuggestion((u) => {
   const wasViewingLatest = cursor === history.length - 1;
   history.push(u);
 
+  // 完成品確定。ライブ枠をクリアし、最終renderで完成形へ収束させる
+  liveDraft = null;
+
   if (wasViewingLatest) {
     cursor = history.length - 1;
     render(u);
@@ -113,6 +132,44 @@ api.onSuggestion((u) => {
     hasUnseenLatest = true;
   }
   updateHistoryNav();
+});
+
+api.onSuggestionPart((u) => {
+  // 履歴が旧会議のまま残っている状態で新会議のライブ部分が届いたら、
+  // 旧会議の完成品はもう来ないため履歴ごとリセットする（"meeting"がno-meetingを経由せず
+  // 連続発火するケースでresetHistory()が呼ばれず、旧会議のhistory/footerが残ることがある）
+  const last = history[history.length - 1];
+  if (last && last.meetingFile !== u.meetingFile) {
+    resetHistory();
+  }
+
+  // 会議切替済みの古い部分は無視（ライブ枠を新会議のものと混在させない）
+  if (!liveDraft || liveDraft.meetingFile !== u.meetingFile) {
+    liveDraft = createLiveDraft(u.meetingFile);
+  }
+
+  // 過去閲覧中はライブ枠を描画しない（新着バッジのみ従来どおり）。バッファ更新は継続する
+  const isViewingLatest = cursor === history.length - 1;
+
+  switch (u.part.kind) {
+    case "summary":
+      liveDraft.summary = u.part.data;
+      if (isViewingLatest) {
+        renderTopic(u.part.data);
+        renderQuestions(u.part.data);
+      }
+      break;
+    case "web":
+      liveDraft.web = u.part.data;
+      if (isViewingLatest) renderWeb(liveDraft);
+      break;
+    case "code":
+      liveDraft.code = u.part.data;
+      if (isViewingLatest) renderCode(liveDraft);
+      break;
+  }
+
+  if (isViewingLatest) el.empty.hidden = true;
 });
 
 api.onClickThrough((enabled) => {
@@ -265,6 +322,7 @@ function resetHistory() {
   history = [];
   cursor = -1;
   hasUnseenLatest = false;
+  liveDraft = null;
   updateHistoryNav();
 }
 
@@ -273,11 +331,31 @@ function goToHistory(index) {
   const clamped = Math.max(0, Math.min(index, history.length - 1));
   if (clamped === cursor) return;
   cursor = clamped;
-  render(history[cursor]);
-  if (cursor === history.length - 1) {
+  const isLatest = cursor === history.length - 1;
+  const entry = history[cursor];
+  if (isLatest && liveDraft && liveDraft.meetingFile === entry.meetingFile) {
+    // 過去閲覧中に届いていたliveDraftの部分結果を最新完成品へ重ねて描画する。
+    // liveDraftの未到着パートはundefinedのままなので、届いた(undefinedでない)パートのみ上書きする
+    el.empty.hidden = true;
+    renderBlocks(mergeLiveDraft(entry.suggestion, liveDraft));
+    renderFooter(entry);
+  } else {
+    render(entry);
+  }
+  if (isLatest) {
     hasUnseenLatest = false;
   }
   updateHistoryNav();
+}
+
+/** 完成品(suggestion)に liveDraft の「届いたパートのみ」を重ねた合成オブジェクトを作る */
+function mergeLiveDraft(suggestion, draft) {
+  return {
+    ...suggestion,
+    ...draft.summary,
+    ...(draft.web && { web: draft.web }),
+    ...(draft.code && { code: draft.code }),
+  };
 }
 
 function updateHistoryNav() {
@@ -289,16 +367,13 @@ function updateHistoryNav() {
   el.historyUnseen.hidden = !hasUnseenLatest;
 }
 
-function render(u) {
-  const s = u.suggestion;
-  el.empty.hidden = true;
-
-  // 話題 + 要約
+function renderTopic(s) {
   el.topic.textContent = s.topic || "";
   el.discussion.textContent = s.discussion || "";
   el.topicBlock.hidden = !(s.topic || s.discussion);
+}
 
-  // 聞くべきこと
+function renderQuestions(s) {
   el.questions.replaceChildren();
   if (Array.isArray(s.questions) && s.questions.length > 0) {
     for (const q of s.questions) {
@@ -310,8 +385,9 @@ function render(u) {
   } else {
     el.questionsBlock.hidden = true;
   }
+}
 
-  // FROM THE WEB
+function renderWeb(s) {
   hideTooltip();
   el.web.replaceChildren();
   if (Array.isArray(s.web) && s.web.length > 0) {
@@ -330,8 +406,9 @@ function render(u) {
   } else {
     el.webBlock.hidden = true;
   }
+}
 
-  // FROM THE CODE
+function renderCode(s) {
   el.code.replaceChildren();
   if (Array.isArray(s.code) && s.code.length > 0) {
     for (const c of s.code) {
@@ -355,8 +432,9 @@ function render(u) {
   } else {
     el.codeBlock.hidden = true;
   }
+}
 
-  // フッター: 更新時刻 / 生成時間 / 累積コスト
+function renderFooter(u) {
   const time = new Date(u.updatedAt).toLocaleTimeString("ja-JP", {
     hour: "2-digit",
     minute: "2-digit",
@@ -365,6 +443,19 @@ function render(u) {
   const secs = (u.durationMs / 1000).toFixed(1);
   const cost = u.cumulativeCostUsd.toFixed(4);
   el.footerStatus.textContent = `Updated ${time} · ${secs}s · ~$${cost}`;
+}
+
+function renderBlocks(s) {
+  renderTopic(s);
+  renderQuestions(s);
+  renderWeb(s);
+  renderCode(s);
+}
+
+function render(u) {
+  el.empty.hidden = true;
+  renderBlocks(u.suggestion);
+  renderFooter(u);
 }
 
 function truncate(str, n) {

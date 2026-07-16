@@ -118,8 +118,11 @@ suggester.ts   A: claude -p sonnet --json-schema（要約+questions+needsCode判
                   （Aの完了直後、AがneedsCode=trueと判定したときだけ発火。Bの完了は待たない。--add-dirで自プロジェクトを参照）
    │           （設定無効化 --setting-sources "" ＋ 空cwd で軽量・高速化。Cもこの前提は維持）
    │           （focusModeは生成開始時に1回だけ読み取り、同一提案内でB/Cに同じ値を使う。B/Cのプロンプト・スキーマではfocusMode=trueのとき最大件数を2件に絞る）
+   │           （A/B/Cは完了ごとに `suggestion-part` をIPCで随時レンダラへ流す。全部揃った完成品は従来どおり `suggestion` で1件だけ通知）
    ▼ IPC
 renderer/      Cluely風の半透明パネルに4ブロック描画
+               `suggestion-part` はhistoryと別の「ライブ枠」へ到着順（A/B/Cの完了順は不定）に
+               マージ描画し、`suggestion`（完成品）到着時にライブ枠をクリアしてhistoryへ1件push
 ```
 
 ## メモ: `claude -p` のチューニング

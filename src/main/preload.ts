@@ -3,6 +3,7 @@ import type {
   ConfigState,
   EditableConfig,
   Status,
+  SuggestionPartUpdate,
   SuggestionUpdate,
 } from "../shared/types";
 
@@ -10,6 +11,9 @@ import type {
 const api = {
   onSuggestion(cb: (u: SuggestionUpdate) => void): void {
     ipcRenderer.on("suggestion", (_e, u: SuggestionUpdate) => cb(u));
+  },
+  onSuggestionPart(cb: (u: SuggestionPartUpdate) => void): void {
+    ipcRenderer.on("suggestion-part", (_e, u: SuggestionPartUpdate) => cb(u));
   },
   onStatus(cb: (s: Status) => void): void {
     ipcRenderer.on("status", (_e, s: Status) => cb(s));

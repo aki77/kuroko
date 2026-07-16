@@ -1,6 +1,12 @@
 import { EventEmitter } from "node:events";
 import { basename } from "node:path";
-import type { Cue, Status, Suggestion, SuggestionUpdate } from "../shared/types";
+import type {
+  Cue,
+  Status,
+  Suggestion,
+  SuggestionPartUpdate,
+  SuggestionUpdate,
+} from "../shared/types";
 import { config } from "./config";
 import { generateSuggestion } from "./suggester";
 import { TranscriptWatcher } from "./watcher";
@@ -15,6 +21,7 @@ import { TranscriptWatcher } from "./watcher";
  */
 export declare interface Orchestrator {
   on(event: "suggestion", listener: (u: SuggestionUpdate) => void): this;
+  on(event: "suggestion-part", listener: (u: SuggestionPartUpdate) => void): this;
   on(event: "status", listener: (s: Status) => void): this;
 }
 
@@ -120,6 +127,10 @@ export class Orchestrator extends EventEmitter {
       const { suggestion, durationMs, costUsd } = await generateSuggestion(
         this.latestCues,
         this.previous,
+        (part) => {
+          if (this.currentFile !== file) return; // 会議切替済みの古い部分は破棄
+          this.emit("suggestion-part", { part, meetingFile: basename(file) });
+        },
       );
 
       // 生成中に会議が切り替わっていたら、この提案は古いので破棄する

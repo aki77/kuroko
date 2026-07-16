@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CodeNote, Cue, Suggestion, WebNote } from "../shared/types";
+import type { CodeNote, Cue, Suggestion, SuggestionPartial, WebNote } from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
 import { config } from "./config";
 import { buildGithubRefUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url";
@@ -253,6 +253,7 @@ const EMPTY_RESULT: ClaudeRunResult = { structured: undefined, durationMs: 0, co
 export async function generateSuggestion(
   cues: Cue[],
   previous: Suggestion | null,
+  onPartial?: (part: SuggestionPartial) => void,
 ): Promise<SuggestResult> {
   await mkdir(config.claudeCwd, { recursive: true });
   const startedAt = Date.now();
@@ -314,6 +315,11 @@ export async function generateSuggestion(
   // 真の依存関係は A→C（CはAのneedsCode/codeQueryにのみ依存）、B はA/Cと独立。
   // Bチェーンはここで走らせて await せず保持しておく（A+Cチェーンと並行実行させるため）。
   const webPromise = runClaude(webTask);
+  webPromise
+    .then((r) => onPartial?.({ kind: "web", data: toWeb(r.structured) }))
+    .catch(() => {
+      // 失敗時は最終allSettledのフォールバックに委ねる（ここでは通知しない）
+    });
 
   // A+Cチェーン: Aを待ってからneedsCode判定し、必要な場合だけCを待つ。Bの完了を待たない。
   // generateSuggestion内のローカル変数（transcript/previous/focusMode等）をクロージャで
@@ -322,11 +328,15 @@ export async function generateSuggestion(
     const summaryResult = await runClaude(summaryTask);
     const summaryRaw = summaryResult.structured;
     const summary = toSummary(summaryRaw);
+    onPartial?.({ kind: "summary", data: summary });
 
     // C（コード参照）はAの判定(needsCode)に依存する逐次実行。
     // needsCodeがtrueかつprojectDirが設定済みのときだけ発火する（LLM判断駆動、無駄な探索を避ける）
     const { needsCode, codeQuery } = toCodeDecision(summaryRaw);
     let codeResult: ClaudeRunResult = EMPTY_RESULT;
+    // toCode()はgit系の同期I/O(execFileSync)を含むため、onPartial通知用と戻り値用で
+    // 2回呼ぶと同じ入力に対して同期処理が倍発生する。1回だけ呼んで両方で使い回す
+    let codeNotes = toCode(EMPTY_RESULT.structured);
     if (needsCode && config.projectDir) {
       const codeTask: ClaudeTask = {
         ...baseTask,
@@ -339,6 +349,8 @@ export async function generateSuggestion(
       };
       try {
         codeResult = await runClaude(codeTask);
+        codeNotes = toCode(codeResult.structured);
+        onPartial?.({ kind: "code", data: codeNotes });
       } catch (err) {
         console.warn("code task failed:", err);
       }
@@ -347,7 +359,7 @@ export async function generateSuggestion(
     // costは生値のまま返し、最終合算はA/B/C対称に呼び出し側1箇所で行う
     return {
       summary,
-      code: toCode(codeResult.structured),
+      code: codeNotes,
       summaryCostUsd: summaryResult.costUsd,
       codeCostUsd: codeResult.costUsd,
     };

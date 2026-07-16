@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } from "electron";
-import type { EditableConfig, Status, SuggestionUpdate } from "../shared/types";
+import type {
+  EditableConfig,
+  Status,
+  SuggestionPartUpdate,
+  SuggestionUpdate,
+} from "../shared/types";
 import { isHttpsUrl } from "../shared/url";
 import {
   applyEditable,
@@ -119,6 +124,9 @@ async function wireOrchestrator(): Promise<void> {
   orchestrator = new Orchestrator();
   orchestrator.on("suggestion", (u: SuggestionUpdate) => {
     win?.webContents.send("suggestion", u);
+  });
+  orchestrator.on("suggestion-part", (u: SuggestionPartUpdate) => {
+    win?.webContents.send("suggestion-part", u);
   });
   orchestrator.on("status", (s: Status) => {
     win?.webContents.send("status", s);
