@@ -54,6 +54,9 @@ const DEFAULTS: Config = {
   /** リプレイ時、有効発話行の先頭からこの件数をスキップして再生を始める（挨拶等の読み飛ばし用） */
   replaySkipLines: 0,
 
+  /** 起動時、最新jsonlの最終更新がこの分数以上前なら会議とみなさず待機で起動する（開発用チューニング値・env専用・単位:分） */
+  meetingStaleMin: 5,
+
   /** 本人（ユーザー自身）の話者名。文字起こしの話者名（表示名）に合わせる。未設定なら本人識別なしで動く */
   myName: undefined,
 
@@ -129,6 +132,7 @@ export const config: Config = {
   replaySpeed: normalizePositiveNumber(process.env.KUROKO_REPLAY_SPEED, DEFAULTS.replaySpeed),
   replayMaxGapMs: normalizeNumber(process.env.KUROKO_REPLAY_MAX_GAP_MS, DEFAULTS.replayMaxGapMs),
   replaySkipLines: normalizeNumber(process.env.KUROKO_REPLAY_SKIP_LINES, DEFAULTS.replaySkipLines, 0),
+  meetingStaleMin: normalizeNumber(process.env.KUROKO_MEETING_STALE_MIN, DEFAULTS.meetingStaleMin, 0),
 };
 
 /** 数値項目を正規化する。外部入力(env/JSON)を信頼せず、Number()→NaN/範囲を最小値1にクランプする */

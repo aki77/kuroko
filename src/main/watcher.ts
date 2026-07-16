@@ -4,6 +4,7 @@ import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Cue } from "../shared/types";
 import { config } from "./config";
+import { isStaleLatest } from "./watcher-stale";
 
 /**
  * 文字起こし用ディレクトリ（config.transcriptDir）を監視し、「最新のjsonl = 進行中のミーティング」を
@@ -26,6 +27,7 @@ export class TranscriptWatcher extends EventEmitter {
   private dirWatcher?: FSWatcher;
   private fileWatcher?: FSWatcher;
   private currentFile?: string;
+  private currentMtimeMs = -Infinity;
 
   async start(): Promise<void> {
     // 新しいミーティング（より新しいjsonl）の出現を監視する
@@ -34,12 +36,10 @@ export class TranscriptWatcher extends EventEmitter {
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
     });
-    this.dirWatcher.on("add", (path) => {
+    this.dirWatcher.on("add", (path, s) => {
       if (!path.endsWith("-transcript.jsonl")) return;
-      // 追加されたファイルが現在のより新しければ切り替える
-      if (!this.currentFile || path > this.currentFile) {
-        void this.switchTo(path);
-      }
+      // 追加されたファイルが現在のより新しければ切り替える（同一/古いファイルへはswitchTo側のガードで戻らない）
+      void this.switchTo(path, s?.mtimeMs ?? Date.now());
     });
 
     // watcherの初期スキャン完了後に最新ファイルを拾う。
@@ -47,26 +47,50 @@ export class TranscriptWatcher extends EventEmitter {
     // その隙間に作られたファイルを取りこぼす窓をなくす（readyまでのadd/changeはバッファされる）。
     await new Promise<void>((resolve) => this.dirWatcher?.once("ready", () => resolve()));
     const latest = await this.findLatest();
-    if (latest && latest !== this.currentFile) {
-      await this.switchTo(latest);
-    } else if (!latest && !this.currentFile) {
-      this.emit("no-meeting");
+    if (!latest) {
+      if (!this.currentFile) this.emit("no-meeting");
+      return;
+    }
+    if (isStaleLatest(latest.mtimeMs, Date.now(), config.meetingStaleMin * 60_000)) {
+      // 古い最新ファイル: 会議にはしないが、追記されたら会議開始できるよう監視する
+      if (!this.currentFile) {
+        this.emit("no-meeting");
+        this.watchStale(latest.path, latest.mtimeMs);
+      }
+    } else if (latest.path !== this.currentFile) {
+      await this.switchTo(latest.path, latest.mtimeMs);
     }
   }
 
   /** 監視対象を指定ファイルに切り替え、内容更新を監視する */
-  private async switchTo(file: string): Promise<void> {
+  private async switchTo(file: string, mtimeMs: number): Promise<void> {
+    if (mtimeMs <= this.currentMtimeMs) return; // より古い/同一へは戻らない
     this.currentFile = file;
-    await this.fileWatcher?.close();
+    this.currentMtimeMs = mtimeMs;
 
     this.emit("meeting", file);
     await this.emitCues(file); // 初回読み込み
 
+    this.watchFile(file, () => void this.emitCues(file));
+  }
+
+  /**
+   * 古い候補ファイル（起動時点でstaleだった最新jsonl）の追記だけを監視する。
+   * 会議としては採用せず（meeting/cuesを出さない）、changeが来たらswitchToに昇格して会議開始する。
+   * switchToと同じ this.fileWatcher スロットを使うため二重監視にならない。
+   */
+  private watchStale(file: string, mtimeMs: number): void {
+    this.watchFile(file, () => void this.switchTo(file, mtimeMs));
+  }
+
+  /** 単一ファイルのchokidar監視を張り直す（既存のfileWatcherは閉じてから差し替える） */
+  private watchFile(file: string, onChange: () => void): void {
+    void this.fileWatcher?.close();
     this.fileWatcher = chokidar.watch(file, {
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
     });
-    this.fileWatcher.on("change", () => void this.emitCues(file));
+    this.fileWatcher.on("change", onChange);
   }
 
   private async emitCues(file: string): Promise<void> {
@@ -79,8 +103,8 @@ export class TranscriptWatcher extends EventEmitter {
     }
   }
 
-  /** transcriptDir内で最も新しい *-transcript.jsonl のフルパスを返す */
-  private async findLatest(): Promise<string | undefined> {
+  /** transcriptDir内で最も新しい *-transcript.jsonl のパスとmtimeを返す（stale判定は呼び出し側の責務） */
+  private async findLatest(): Promise<{ path: string; mtimeMs: number } | undefined> {
     let entries: string[];
     try {
       entries = await readdir(config.transcriptDir);
@@ -91,13 +115,13 @@ export class TranscriptWatcher extends EventEmitter {
     if (files.length === 0) return undefined;
 
     // ファイル名でソート済みだが、念のためmtimeでも最新を選ぶ
-    let latest: { path: string; mtime: number } | undefined;
+    let latest: { path: string; mtimeMs: number } | undefined;
     for (const name of files) {
       const path = join(config.transcriptDir, name);
       const s = await stat(path);
-      if (!latest || s.mtimeMs > latest.mtime) latest = { path, mtime: s.mtimeMs };
+      if (!latest || s.mtimeMs > latest.mtimeMs) latest = { path, mtimeMs: s.mtimeMs };
     }
-    return latest?.path;
+    return latest;
   }
 
   async stop(): Promise<void> {

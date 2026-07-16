@@ -71,6 +71,7 @@ pnpm start
 | `KUROKO_MEETING_CONTEXT` | （なし） | – | 会議のアジェンダ・議題資料（[会議コンテキスト](#会議コンテキストアジェンダ議題資料)参照）。非永続化のため設定ウィンドウの対象外だが、専用ウィンドウでの編集可否には同じ「envで固定中」ルールが適用される |
 | `KUROKO_CLAUDE_CWD` | `~/.cache/kuroko/run` | – | claude -p を実行する作業ディレクトリ |
 | `KUROKO_CLAUDE_BIN` | （PATH解決） | – | claude CLI の絶対パス |
+| `KUROKO_MEETING_STALE_MIN` | `5` | – | 起動時、最新jsonlの最終更新がこの分数以上前なら会議とみなさず待機で起動（開発用チューニング値・単位:分）。待機中もそのファイルへの追記を検知したら会議を開始する |
 
 `KUROKO_MY_NAME` は文字起こしに出る自分の話者名（表示名）に合わせると精度が上がる（多少の表記ゆれはLLM側で吸収される）。
 
@@ -111,6 +112,9 @@ zoom-transcripts/*.jsonl
    │ (chokidar監視 / 最新ファイル=進行中の会議)
    ▼
 watcher.ts     seqごと最新revisionを採用した確定発話リストを生成
+               起動時、最新jsonlの最終更新が古い（既定5分以上前、KUROKO_MEETING_STALE_MIN）場合は
+               会議として採用せず待機(no-meeting)で起動。待機中もそのファイルへの追記を監視し、
+               追記が来たら会議を開始する
    ▼
 orchestrator.ts  発話がN件たまったらトリガー（多重起動防止・デバウンス）
    ▼

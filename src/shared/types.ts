@@ -106,6 +106,12 @@ export interface Config {
   replaySpeed: number;
   replayMaxGapMs: number;
   replaySkipLines: number;
+  /**
+   * 【開発用チューニング値】起動時、最新jsonlの最終更新がこの分数以上前なら
+   * 「進行中の会議」とみなさず待機(no-meeting)で起動する。待機中もそのファイルの
+   * 追記は監視し、追記が来たら会議開始する。env専用（GUI非対象）。単位は分。
+   */
+  meetingStaleMin: number;
   myName?: string;
   contentProtection: boolean;
   projectDir?: string;
