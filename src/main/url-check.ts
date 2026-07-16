@@ -66,7 +66,10 @@ export function __resetUrlCheckCacheForTest(): void {
  * 判定結果は内部で unreachable/reachable/indeterminate の3状態に分けてcacheに載せ、
  * 状態ごとに異なるTTLを適用する（確定到達可能は長命、判定不能は短命）。TTL内であればfetchをスキップする。
  */
-export async function isUrlUnreachable(url: string, opts: UrlCheckOptions = {}): Promise<boolean> {
+export async function isUrlUnreachable(
+  url: string,
+  opts: UrlCheckOptions = {},
+): Promise<boolean> {
   const cached = cache.get(url);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.state === "unreachable";
@@ -80,7 +83,11 @@ export async function isUrlUnreachable(url: string, opts: UrlCheckOptions = {}):
 
   const request = async (method: "HEAD" | "GET"): Promise<number | null> => {
     try {
-      const res = await fetchImpl(url, { method, redirect: "follow", signal: controller.signal });
+      const res = await fetchImpl(url, {
+        method,
+        redirect: "follow",
+        signal: controller.signal,
+      });
       return res.status;
     } catch {
       return null; // ネットワークエラー・タイムアウト(abort)は判定不能 → 呼び出し元でfalse扱い
@@ -125,7 +132,11 @@ export async function findUnreachableUrls(
 ): Promise<Set<string>> {
   const uniqueUrls = Array.from(new Set(urls));
   const results = await Promise.all(
-    uniqueUrls.map(async (url) => [url, await isUrlUnreachable(url, opts)] as const),
+    uniqueUrls.map(
+      async (url) => [url, await isUrlUnreachable(url, opts)] as const,
+    ),
   );
-  return new Set(results.filter(([, unreachable]) => unreachable).map(([url]) => url));
+  return new Set(
+    results.filter(([, unreachable]) => unreachable).map(([url]) => url),
+  );
 }

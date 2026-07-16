@@ -10,10 +10,14 @@
     "copy-renderer": "node scripts/copy-renderer.mjs",
     "start": "pnpm run build && env -u ELECTRON_RUN_AS_NODE electron .",
     "dev": "tsc -w -p tsconfig.json & tsc -w -p tsconfig.preload.json & wait",
-    "pretest": "tsc -p tsconfig.test.json",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "pretest": "biome check . && tsc -p tsconfig.test.json",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.4",
     "@types/node": "^24.0.0",
     "electron": "^34.0.0",
     "typescript": "^5.7.0"

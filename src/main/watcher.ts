@@ -23,6 +23,7 @@ export declare interface TranscriptWatcher {
   on(event: "no-meeting", listener: () => void): this;
 }
 
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: EventEmitterのonを型付けするための意図的なTypedEventEmitterパターン
 export class TranscriptWatcher extends EventEmitter {
   private dirWatcher?: FSWatcher;
   private fileWatcher?: FSWatcher;
@@ -45,13 +46,17 @@ export class TranscriptWatcher extends EventEmitter {
     // watcherの初期スキャン完了後に最新ファイルを拾う。
     // findLatestとwatch開始の順序を「watch開始 → ready → findLatest」にすることで、
     // その隙間に作られたファイルを取りこぼす窓をなくす（readyまでのadd/changeはバッファされる）。
-    await new Promise<void>((resolve) => this.dirWatcher?.once("ready", () => resolve()));
+    await new Promise<void>((resolve) =>
+      this.dirWatcher?.once("ready", () => resolve()),
+    );
     const latest = await this.findLatest();
     if (!latest) {
       if (!this.currentFile) this.emit("no-meeting");
       return;
     }
-    if (isStaleLatest(latest.mtimeMs, Date.now(), config.meetingStaleMin * 60_000)) {
+    if (
+      isStaleLatest(latest.mtimeMs, Date.now(), config.meetingStaleMin * 60_000)
+    ) {
       // 古い最新ファイル: 会議にはしないが、追記されたら会議開始できるよう監視する
       if (!this.currentFile) {
         this.emit("no-meeting");
@@ -104,7 +109,9 @@ export class TranscriptWatcher extends EventEmitter {
   }
 
   /** transcriptDir内で最も新しい *-transcript.jsonl のパスとmtimeを返す（stale判定は呼び出し側の責務） */
-  private async findLatest(): Promise<{ path: string; mtimeMs: number } | undefined> {
+  private async findLatest(): Promise<
+    { path: string; mtimeMs: number } | undefined
+  > {
     let entries: string[];
     try {
       entries = await readdir(config.transcriptDir);
@@ -119,7 +126,8 @@ export class TranscriptWatcher extends EventEmitter {
     for (const name of files) {
       const path = join(config.transcriptDir, name);
       const s = await stat(path);
-      if (!latest || s.mtimeMs > latest.mtimeMs) latest = { path, mtimeMs: s.mtimeMs };
+      if (!latest || s.mtimeMs > latest.mtimeMs)
+        latest = { path, mtimeMs: s.mtimeMs };
     }
     return latest;
   }

@@ -31,7 +31,9 @@ const api = {
   getConfig(): Promise<ConfigState> {
     return ipcRenderer.invoke("config:get");
   },
-  setConfig(v: Partial<EditableConfig>): Promise<{ ok: boolean; state: ConfigState }> {
+  setConfig(
+    v: Partial<EditableConfig>,
+  ): Promise<{ ok: boolean; state: ConfigState }> {
     return ipcRenderer.invoke("config:set", v);
   },
   openSettings(): void {
@@ -40,9 +42,12 @@ const api = {
   openContext(): void {
     ipcRenderer.send("open-context");
   },
-  summarizeContext(
-    raw: string,
-  ): Promise<{ ok: boolean; summarized: boolean; state: ConfigState; error?: string }> {
+  summarizeContext(raw: string): Promise<{
+    ok: boolean;
+    summarized: boolean;
+    state: ConfigState;
+    error?: string;
+  }> {
     return ipcRenderer.invoke("context:summarize", raw);
   },
   onMeetingContextChanged(cb: (state: ConfigState) => void): void {

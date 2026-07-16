@@ -15,9 +15,9 @@
           <span>KUROKO</span>
         </div>
         <div class="titlebar-actions">
-          <button id="focusModeBtn" title="集中／通常モードの切替">📋 通常</button>
-          <button id="settingsBtn" title="設定">⚙</button>
-          <button id="refreshBtn" title="今すぐ提案 (⌘⇧K)">↻</button>
+          <button type="button" id="focusModeBtn" title="集中／通常モードの切替">📋 通常</button>
+          <button type="button" id="settingsBtn" title="設定">⚙</button>
+          <button type="button" id="refreshBtn" title="今すぐ提案 (⌘⇧K)">↻</button>
         </div>
       </header>
 
@@ -55,7 +55,7 @@
           <h1>
             <button type="button" id="topicHeader" aria-expanded="true">
               <span class="collapse-indicator" id="summaryCaret" aria-hidden="true">▼</span>
-              <span id="topic"></span>
+              <span id="topic">話題</span>
             </button>
           </h1>
           <p id="discussion"></p>
@@ -81,9 +81,9 @@
         <span class="footer-status" id="footerStatus"></span>
         <span class="history-nav" id="historyNav">
           <span class="history-unseen" id="historyUnseen" hidden>● 新着</span>
-          <button id="historyPrevBtn" title="前の提案 (⌘⇧←)">◀</button>
+          <button type="button" id="historyPrevBtn" title="前の提案 (⌘⇧←)">◀</button>
           <span class="history-position" id="historyPosition">0 / 0</span>
-          <button id="historyNextBtn" title="次の提案 (⌘⇧→)">▶</button>
+          <button type="button" id="historyNextBtn" title="次の提案 (⌘⇧→)">▶</button>
         </span>
       </footer>
     </div>

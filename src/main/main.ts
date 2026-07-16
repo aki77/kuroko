@@ -1,5 +1,12 @@
 import { join } from "node:path";
-import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  screen,
+  shell,
+} from "electron";
 import type {
   EditableConfig,
   Status,
@@ -18,7 +25,10 @@ import {
 import { Orchestrator } from "./orchestrator.js";
 import { Replayer } from "./replayer.js";
 import { readSettings, writeSettings } from "./settings-store.js";
-import { CONTEXT_SUMMARIZE_THRESHOLD, summarizeMeetingContext } from "./suggester.js";
+import {
+  CONTEXT_SUMMARIZE_THRESHOLD,
+  summarizeMeetingContext,
+} from "./suggester.js";
 
 let win: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
@@ -86,7 +96,9 @@ function openSettingsWindow(): void {
   settingsWin.on("closed", () => {
     settingsWin = null;
   });
-  settingsWin.loadFile(join(import.meta.dirname, "..", "renderer", "settings.html"));
+  settingsWin.loadFile(
+    join(import.meta.dirname, "..", "renderer", "settings.html"),
+  );
 }
 
 /**
@@ -111,7 +123,9 @@ function openContextWindow(): void {
   contextWin.on("closed", () => {
     contextWin = null;
   });
-  contextWin.loadFile(join(import.meta.dirname, "..", "renderer", "context.html"));
+  contextWin.loadFile(
+    join(import.meta.dirname, "..", "renderer", "context.html"),
+  );
 }
 
 /** 開いている全ウィンドウへ同一イベントを送る。個別ハンドラでの送信先ベタ書きの増殖を防ぐ。 */

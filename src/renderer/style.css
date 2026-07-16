@@ -28,7 +28,8 @@ body {
   height: 100%;
   background: transparent; /* ウィンドウ透過を活かす */
   font-family:
-    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP",
+    sans-serif;
   color: var(--fg);
   -webkit-user-select: none;
   user-select: none;
@@ -273,8 +274,16 @@ body {
   padding: 4px 14px 14px;
   -webkit-user-select: text;
   user-select: text;
-  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
-  mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - 24px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - 24px),
+    transparent 100%
+  );
 }
 .content::-webkit-scrollbar {
   width: 6px;

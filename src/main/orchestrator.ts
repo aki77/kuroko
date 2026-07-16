@@ -21,10 +21,14 @@ import { TranscriptWatcher } from "./watcher.js";
  */
 export declare interface Orchestrator {
   on(event: "suggestion", listener: (u: SuggestionUpdate) => void): this;
-  on(event: "suggestion-part", listener: (u: SuggestionPartUpdate) => void): this;
+  on(
+    event: "suggestion-part",
+    listener: (u: SuggestionPartUpdate) => void,
+  ): this;
   on(event: "status", listener: (s: Status) => void): this;
 }
 
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: EventEmitterのonを型付けするための意図的なTypedEventEmitterパターン
 export class Orchestrator extends EventEmitter {
   private watcher = new TranscriptWatcher();
   private currentFile?: string;
@@ -32,8 +36,6 @@ export class Orchestrator extends EventEmitter {
   private previous: Suggestion | null = null;
   private cueCountAtLastRun = 0;
   private generating = false;
-  /** 生成中のrunが対象としている会議ファイル。完了時に現在の会議と一致するか検証する */
-  private runningForFile?: string;
   /** 生成中に手動トリガーが来たら覚えておき、完了後に実行する */
   private pendingTrigger = false;
   private debounceTimer?: NodeJS.Timeout;
@@ -46,11 +48,14 @@ export class Orchestrator extends EventEmitter {
 
   /** 現在の this.watcher にリスナを登録する。watcher差し替え時にも再利用する */
   private bindWatcher(): void {
-    this.watcher.on("no-meeting", () => this.emit("status", { kind: "no-meeting" }));
+    this.watcher.on("no-meeting", () =>
+      this.emit("status", { kind: "no-meeting" }),
+    );
 
     this.watcher.on("meeting", (file) => {
       // 新しいミーティングに切り替わったら状態をリセット。
-      // 生成中のrunがあっても runningForFile と不一致になり結果は破棄される。
+      // 生成中のrunがあっても run() 内のローカル file 変数と this.currentFile が
+      // 不一致になるため、完了時にその結果は破棄される。
       this.currentFile = file;
       this.previous = null;
       this.cueCountAtLastRun = 0;
@@ -119,7 +124,6 @@ export class Orchestrator extends EventEmitter {
 
     const file = this.currentFile; // このrunが対象とする会議を固定する
     this.generating = true;
-    this.runningForFile = file;
     this.cueCountAtLastRun = this.latestCues.length;
     this.emit("status", { kind: "querying" });
 
@@ -156,7 +160,6 @@ export class Orchestrator extends EventEmitter {
       });
     } finally {
       this.generating = false;
-      this.runningForFile = undefined;
       if (this.pendingTrigger) {
         // 生成中に来た手動トリガーを消化する
         this.pendingTrigger = false;

@@ -3,17 +3,31 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CodeNote, Cue, Suggestion, SuggestionPartial, WebNote } from "../shared/types.js";
+import type {
+  CodeNote,
+  Cue,
+  Suggestion,
+  SuggestionPartial,
+  WebNote,
+} from "../shared/types.js";
 import { isHttpsUrl } from "../shared/url.js";
 import { config } from "./config.js";
-import { buildGithubRefUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url.js";
+import {
+  buildGithubRefUrl,
+  isPathDirty,
+  isRefStale,
+  resolveGitRepo,
+} from "./git-url.js";
 import { findUnreachableUrls } from "./url-check.js";
 
 /** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {
   type: "object",
   properties: {
-    topic: { type: "string", description: "今まさに話している話題の短い見出し" },
+    topic: {
+      type: "string",
+      description: "今まさに話している話題の短い見出し",
+    },
     discussion: { type: "string", description: "今の議論の2〜3文の要約" },
     questions: {
       type: "array",
@@ -53,7 +67,8 @@ function buildWebSchema(focusMode: boolean) {
             detail: { type: "string" },
             url: {
               type: "string",
-              description: "参照した出典ページの完全なURL（https）。無ければ省略",
+              description:
+                "参照した出典ページの完全なURL（https）。無ければ省略",
             },
           },
           required: ["title", "detail"],
@@ -87,7 +102,8 @@ function buildCodeSchema(focusMode: boolean) {
             detail: { type: "string" },
             ref: {
               type: "string",
-              description: "参照した実装の位置（例: \"src/main/settings-store.ts:12\"）。無ければ省略",
+              description:
+                '参照した実装の位置（例: "src/main/settings-store.ts:12"）。無ければ省略',
             },
           },
           required: ["title", "detail"],
@@ -238,7 +254,11 @@ interface ClaudeRunResult {
 }
 
 /** B/Cが未実行・失敗したときのダミー結果（cost/duration 0）。A/B/Cを対称に扱うための共通フォールバック */
-const EMPTY_RESULT: ClaudeRunResult = { structured: undefined, durationMs: 0, costUsd: 0 };
+const EMPTY_RESULT: ClaudeRunResult = {
+  structured: undefined,
+  durationMs: 0,
+  costUsd: 0,
+};
 
 /**
  * 直近の発話と（あれば）前回の提案をClaudeに渡し、新しい提案を生成する。
@@ -366,7 +386,10 @@ export async function generateSuggestion(
     };
   })();
 
-  const [acOutcome, webOutcome] = await Promise.allSettled([acChain, webPromise]);
+  const [acOutcome, webOutcome] = await Promise.allSettled([
+    acChain,
+    webPromise,
+  ]);
 
   // A（要約）が失敗したら提案自体を出せないためthrowする（従来の全体失敗と同じ挙動）
   if (acOutcome.status === "rejected") {
@@ -413,8 +436,12 @@ function toSummary(raw: unknown): Omit<Suggestion, "web" | "code"> {
 }
 
 /** Aの生structured_outputから、C発火要否の判定フラグだけを別途読み取る */
-function toCodeDecision(raw: unknown): { needsCode: boolean; codeQuery: string } {
-  if (!raw || typeof raw !== "object") return { needsCode: false, codeQuery: "" };
+function toCodeDecision(raw: unknown): {
+  needsCode: boolean;
+  codeQuery: string;
+} {
+  if (!raw || typeof raw !== "object")
+    return { needsCode: false, codeQuery: "" };
   const o = raw as Record<string, unknown>;
   return {
     needsCode: o.needsCode === true,
@@ -431,7 +458,9 @@ function toWeb(raw: unknown): WebNote[] {
   const o = raw as Record<string, unknown>;
   return Array.isArray(o.web)
     ? o.web
-        .filter((w): w is Record<string, unknown> => !!w && typeof w === "object")
+        .filter(
+          (w): w is Record<string, unknown> => !!w && typeof w === "object",
+        )
         .map((w) => ({
           title: typeof w.title === "string" ? w.title : "",
           detail: typeof w.detail === "string" ? w.detail : "",
@@ -506,7 +535,13 @@ function toCode(raw: unknown): CodeNote[] {
       const ref = typeof c.ref === "string" && c.ref ? c.ref : undefined;
       const url =
         ref && repo && projectDir
-          ? buildGithubRefUrl(ref, repo, projectDir, isDirtyMemoized, () => isStale)
+          ? buildGithubRefUrl(
+              ref,
+              repo,
+              projectDir,
+              isDirtyMemoized,
+              () => isStale,
+            )
           : null;
       return {
         title: typeof c.title === "string" ? c.title : "",
@@ -526,11 +561,19 @@ function toCode(raw: unknown): CodeNote[] {
 let cachedClaudeBin: string | undefined;
 function resolveClaudeBin(): string {
   if (cachedClaudeBin) return cachedClaudeBin;
-  if (config.claudeBin) return (cachedClaudeBin = config.claudeBin);
+  if (config.claudeBin) {
+    cachedClaudeBin = config.claudeBin;
+    return cachedClaudeBin;
+  }
 
   try {
-    const found = execFileSync("/usr/bin/which", ["claude"], { encoding: "utf8" }).trim();
-    if (found) return (cachedClaudeBin = found);
+    const found = execFileSync("/usr/bin/which", ["claude"], {
+      encoding: "utf8",
+    }).trim();
+    if (found) {
+      cachedClaudeBin = found;
+      return cachedClaudeBin;
+    }
   } catch {
     // PATHに無い（GUI起動時など）。次のフォールバックへ
   }
@@ -542,11 +585,15 @@ function resolveClaudeBin(): string {
     "/usr/local/bin/claude",
   ];
   for (const c of candidates) {
-    if (existsSync(c)) return (cachedClaudeBin = c);
+    if (existsSync(c)) {
+      cachedClaudeBin = c;
+      return cachedClaudeBin;
+    }
   }
 
   // 見つからなくても spawn に "claude" を渡して error イベントで拾わせる
-  return (cachedClaudeBin = "claude");
+  cachedClaudeBin = "claude";
+  return cachedClaudeBin;
 }
 
 /** claude -p をタスク定義に従いサブプロセスで実行し、構造化出力・所要時間・コストを返す */
@@ -620,7 +667,9 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
         return;
       }
       if (parsed.is_error) {
-        reject(new Error(`claude returned error: ${parsed.result ?? "unknown"}`));
+        reject(
+          new Error(`claude returned error: ${parsed.result ?? "unknown"}`),
+        );
         return;
       }
       resolve({

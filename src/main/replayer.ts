@@ -1,5 +1,5 @@
-import { appendFile, readFile, unlink, writeFile } from "node:fs/promises";
 import { unlinkSync } from "node:fs";
+import { appendFile, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "./config.js";
 
@@ -39,11 +39,16 @@ export class Replayer {
     const before = lines.length;
     lines = lines.slice(skip);
     if (skip > 0) {
-      console.log(`[replayer] skipped first ${before - lines.length} of ${before} lines`);
+      console.log(
+        `[replayer] skipped first ${before - lines.length} of ${before} lines`,
+      );
     }
 
     if (lines.length === 0) {
-      console.warn("[replayer] source file has no valid lines:", this.sourceFile);
+      console.warn(
+        "[replayer] source file has no valid lines:",
+        this.sourceFile,
+      );
     }
 
     const targetFile = join(config.transcriptDir, makeReplayFilename());

@@ -1,6 +1,11 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Config, ConfigState, EditableConfig, EditableKey } from "../shared/types.js";
+import type {
+  Config,
+  ConfigState,
+  EditableConfig,
+  EditableKey,
+} from "../shared/types.js";
 import { EDITABLE_KEYS, FONT_SCALE_PRESETS } from "../shared/types.js";
 
 /** GUI編集対象外（env専用）も含む全項目の既定値 */
@@ -115,7 +120,10 @@ const envLockedKeys: Record<EditableKey, boolean> = Object.fromEntries(
  * 常にsettings.jsonへ永続化しない（env固定時を除く）キーの集合。envLockedKeysと対称の仕組み。
  * projectDir/meetingContextは会議ごとに変わるため、起動ごとに空へリセットしたい（非永続化）。
  */
-const NON_PERSISTED_KEYS = new Set<EditableKey>(["projectDir", "meetingContext"]);
+const NON_PERSISTED_KEYS = new Set<EditableKey>([
+  "projectDir",
+  "meetingContext",
+]);
 
 /**
  * 消費側は `import { config } from "./config"` して `config.xxx` を都度読むため、
@@ -129,10 +137,24 @@ export const config: Config = {
   claudeCwd: process.env.KUROKO_CLAUDE_CWD ?? DEFAULTS.claudeCwd,
   claudeBin: process.env.KUROKO_CLAUDE_BIN,
   replayFile: process.env.KUROKO_REPLAY_FILE,
-  replaySpeed: normalizePositiveNumber(process.env.KUROKO_REPLAY_SPEED, DEFAULTS.replaySpeed),
-  replayMaxGapMs: normalizeNumber(process.env.KUROKO_REPLAY_MAX_GAP_MS, DEFAULTS.replayMaxGapMs),
-  replaySkipLines: normalizeNumber(process.env.KUROKO_REPLAY_SKIP_LINES, DEFAULTS.replaySkipLines, 0),
-  meetingStaleMin: normalizeNumber(process.env.KUROKO_MEETING_STALE_MIN, DEFAULTS.meetingStaleMin, 0),
+  replaySpeed: normalizePositiveNumber(
+    process.env.KUROKO_REPLAY_SPEED,
+    DEFAULTS.replaySpeed,
+  ),
+  replayMaxGapMs: normalizeNumber(
+    process.env.KUROKO_REPLAY_MAX_GAP_MS,
+    DEFAULTS.replayMaxGapMs,
+  ),
+  replaySkipLines: normalizeNumber(
+    process.env.KUROKO_REPLAY_SKIP_LINES,
+    DEFAULTS.replaySkipLines,
+    0,
+  ),
+  meetingStaleMin: normalizeNumber(
+    process.env.KUROKO_MEETING_STALE_MIN,
+    DEFAULTS.meetingStaleMin,
+    0,
+  ),
 };
 
 /** 数値項目を正規化する。外部入力(env/JSON)を信頼せず、Number()→NaN/範囲を最小値1にクランプする */
@@ -202,7 +224,10 @@ function normalizeBoolean(raw: unknown, fallback: boolean): boolean {
 }
 
 /** 1キー分を「値の候補（string|number|undefined等、raw）→正規化済みの実効値」に変換する */
-function normalizeEditable(key: EditableKey, raw: unknown): EditableConfig[typeof key] {
+function normalizeEditable(
+  key: EditableKey,
+  raw: unknown,
+): EditableConfig[typeof key] {
   switch (key) {
     case "model":
       return normalizeString(raw, DEFAULTS.model);
@@ -275,7 +300,9 @@ export function applyEditable(next: Partial<EditableConfig>): void {
 
 /** config/DEFAULTS から EditableConfig 部分だけを抜き出す */
 function pickEditable(src: Config): EditableConfig {
-  return Object.fromEntries(EDITABLE_KEYS.map((k) => [k, src[k]])) as EditableConfig;
+  return Object.fromEntries(
+    EDITABLE_KEYS.map((k) => [k, src[k]]),
+  ) as EditableConfig;
 }
 
 /** 現在の実効値と envLocked を返す。設定ウィンドウの初期表示に使う */

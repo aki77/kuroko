@@ -22,19 +22,32 @@ function resolveGitBin(): string {
   if (cachedGitBin) return cachedGitBin;
 
   try {
-    const found = execFileSync("/usr/bin/which", ["git"], { encoding: "utf8" }).trim();
-    if (found) return (cachedGitBin = found);
+    const found = execFileSync("/usr/bin/which", ["git"], {
+      encoding: "utf8",
+    }).trim();
+    if (found) {
+      cachedGitBin = found;
+      return cachedGitBin;
+    }
   } catch {
     // PATHに無い（GUI起動時など）。次のフォールバックへ
   }
 
-  const candidates = ["/opt/homebrew/bin/git", "/usr/bin/git", "/usr/local/bin/git"];
+  const candidates = [
+    "/opt/homebrew/bin/git",
+    "/usr/bin/git",
+    "/usr/local/bin/git",
+  ];
   for (const c of candidates) {
-    if (existsSync(c)) return (cachedGitBin = c);
+    if (existsSync(c)) {
+      cachedGitBin = c;
+      return cachedGitBin;
+    }
   }
 
   // 見つからなくても execFileSync に "git" を渡してエラーで拾わせる
-  return (cachedGitBin = "git");
+  cachedGitBin = "git";
+  return cachedGitBin;
 }
 
 /** シェルを介さず引数配列で git を実行する。失敗しても例外を投げず null を返す */
@@ -50,13 +63,19 @@ function git(dir: string, args: string[]): string | null {
 }
 
 /** git remote の URL（ssh/https）を owner/repo に分解する。github.com 以外は null */
-export function parseGithubRemote(remoteUrl: string): { owner: string; repo: string } | null {
+export function parseGithubRemote(
+  remoteUrl: string,
+): { owner: string; repo: string } | null {
   // ssh形式: git@github.com:owner/repo.git
-  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
+  const sshMatch = remoteUrl.match(
+    /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/,
+  );
   if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
 
   // https形式: https://github.com/owner/repo(.git)
-  const httpsMatch = remoteUrl.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
+  const httpsMatch = remoteUrl.match(
+    /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+  );
   if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
 
   return null;
@@ -83,7 +102,11 @@ function resolveGitRepoUncached(projectDir: string): GitRepoInfo | null {
   if (sha) return { ...parsed, ref: sha };
 
   // SHAが取れない場合のみデフォルトブランチにフォールバック（例: "origin/main" -> "main"）
-  const symbolicRef = git(projectDir, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
+  const symbolicRef = git(projectDir, [
+    "symbolic-ref",
+    "--short",
+    "refs/remotes/origin/HEAD",
+  ]);
   if (symbolicRef) {
     const branch = symbolicRef.replace(/^origin\//, "");
     if (branch) return { ...parsed, ref: branch };
@@ -185,7 +208,9 @@ export function buildGithubBlobUrl(
   if (isStale(projectDir, repo.ref)) return base; // キャッシュされたrefが古いなら行番号は信頼できないため落とす
   if (isDirty(projectDir, path)) return base; // dirtyならHEADの行番号は信頼できないため落とす
 
-  return endLine ? `${base}#L${startLine}-L${endLine}` : `${base}#L${startLine}`;
+  return endLine
+    ? `${base}#L${startLine}-L${endLine}`
+    : `${base}#L${startLine}`;
 }
 
 /**

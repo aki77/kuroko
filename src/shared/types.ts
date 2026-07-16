@@ -48,7 +48,10 @@ export interface CodeNote {
 
 /** 提案生成の部分結果（A/B/Cそれぞれの完了時に随時レンダラへ流す） */
 export type SuggestionPartial =
-  | { kind: "summary"; data: Pick<Suggestion, "topic" | "discussion" | "questions"> }
+  | {
+      kind: "summary";
+      data: Pick<Suggestion, "topic" | "discussion" | "questions">;
+    }
   | { kind: "web"; data: WebNote[] }
   | { kind: "code"; data: CodeNote[] };
 

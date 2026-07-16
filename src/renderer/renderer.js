@@ -95,7 +95,9 @@ el.focusModeBtn.addEventListener("click", () => {
 });
 el.historyPrevBtn.addEventListener("click", () => goToHistory(cursor - 1));
 el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
-el.historyUnseen.addEventListener("click", () => goToHistory(history.length - 1));
+el.historyUnseen.addEventListener("click", () =>
+  goToHistory(history.length - 1),
+);
 
 el.topicHeader.addEventListener("click", () => {
   summaryCollapsed = !summaryCollapsed;
@@ -218,7 +220,9 @@ function loadProjectDirHistory() {
   try {
     const raw = localStorage.getItem(PROJECT_DIR_HISTORY_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((v) => typeof v === "string")
+      : [];
   } catch {
     return [];
   }
@@ -405,7 +409,9 @@ function updateHistoryNav() {
 }
 
 function renderTopic(s) {
-  el.topic.textContent = s.topic || "";
+  // topicBlock表示時（topic/discussionのどちらかがある時）は見出しを常に非空にする
+  // （スクリーンリーダー向けに空見出しを避けるため。s.discussionのみのケースのフォールバック）
+  el.topic.textContent = s.topic || (s.discussion ? "話題" : "");
   el.discussion.textContent = s.discussion || "";
   el.topicBlock.hidden = !(s.topic || s.discussion);
   if (!summaryCollapsedTouched) summaryCollapsed = focusMode;

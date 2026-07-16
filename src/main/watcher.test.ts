@@ -1,5 +1,5 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 // isStaleLatest は watcher.ts から呼ばれる依存ゼロの純粋関数だが、watcher.ts 自体は
 // "./config"（拡張子なし・CommonJSビルド前提）に依存しており、node --experimental-strip-types の
 // ネイティブESMローダーでは拡張子なし相対importが解決できず watcher.ts を直接importできない。

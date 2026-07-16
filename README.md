@@ -29,6 +29,16 @@ pnpm install
 pnpm start
 ```
 
+## コマンド
+
+lint/formatは [Biome](https://biomejs.dev/) を使用（`pnpm test` の `pretest` でも `biome check` を自動実行）。
+
+```sh
+pnpm run lint     # lintのみ（検出）
+pnpm run format   # フォーマットのみ適用
+pnpm run check    # lint+format+import整理をまとめて適用
+```
+
 ## 使い方（ショートカット）
 
 | キー | 動作 |

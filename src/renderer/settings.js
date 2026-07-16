@@ -62,7 +62,9 @@ function applyValueToInput(input, value) {
  * option value="1.0"と不一致になりselectedIndex=-1になる）を避けて数値比較で選択する。
  */
 function selectMatchingOption(select, value) {
-  const match = [...select.options].find((opt) => Number(opt.value) === Number(value));
+  const match = [...select.options].find(
+    (opt) => Number(opt.value) === Number(value),
+  );
   select.value = match ? match.value : "";
 }
 
@@ -119,7 +121,7 @@ async function save() {
     applyState(res.state);
     showSaved();
   } catch (err) {
-    showError(`保存に失敗しました: ${err && err.message ? err.message : err}`);
+    showError(`保存に失敗しました: ${err?.message ? err.message : err}`);
   } finally {
     saveBtn.disabled = false;
   }
