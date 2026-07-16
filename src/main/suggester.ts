@@ -3,11 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CodeNote, Cue, Suggestion, SuggestionPartial, WebNote } from "../shared/types";
-import { isHttpsUrl } from "../shared/url";
-import { config } from "./config";
-import { buildGithubRefUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url";
-import { findUnreachableUrls } from "./url-check";
+import type { CodeNote, Cue, Suggestion, SuggestionPartial, WebNote } from "../shared/types.js";
+import { isHttpsUrl } from "../shared/url.js";
+import { config } from "./config.js";
+import { buildGithubRefUrl, isPathDirty, isRefStale, resolveGitRepo } from "./git-url.js";
+import { findUnreachableUrls } from "./url-check.js";
 
 /** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {

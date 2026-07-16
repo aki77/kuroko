@@ -2,9 +2,9 @@ import { EventEmitter } from "node:events";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
-import type { Cue } from "../shared/types";
-import { config } from "./config";
-import { isStaleLatest } from "./watcher-stale";
+import type { Cue } from "../shared/types.js";
+import { config } from "./config.js";
+import { isStaleLatest } from "./watcher-stale.js";
 
 /**
  * 文字起こし用ディレクトリ（config.transcriptDir）を監視し、「最新のjsonl = 進行中のミーティング」を

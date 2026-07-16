@@ -1,7 +1,7 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
-import type { EditableConfig } from "../shared/types";
+import type { EditableConfig } from "../shared/types.js";
 
 /**
  * GUIで編集した設定の永続化。userData/settings.json にフラットなJSONで保存する。

@@ -5,8 +5,8 @@ import type {
   Status,
   SuggestionPartUpdate,
   SuggestionUpdate,
-} from "../shared/types";
-import { isHttpsUrl } from "../shared/url";
+} from "../shared/types.js";
+import { isHttpsUrl } from "../shared/url.js";
 import {
   applyEditable,
   config,
@@ -14,11 +14,11 @@ import {
   getPersistableValues,
   loadConfig,
   setFocusMode,
-} from "./config";
-import { Orchestrator } from "./orchestrator";
-import { Replayer } from "./replayer";
-import { readSettings, writeSettings } from "./settings-store";
-import { CONTEXT_SUMMARIZE_THRESHOLD, summarizeMeetingContext } from "./suggester";
+} from "./config.js";
+import { Orchestrator } from "./orchestrator.js";
+import { Replayer } from "./replayer.js";
+import { readSettings, writeSettings } from "./settings-store.js";
+import { CONTEXT_SUMMARIZE_THRESHOLD, summarizeMeetingContext } from "./suggester.js";
 
 let win: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
@@ -29,6 +29,7 @@ let clickThrough = false;
 
 const WIDTH = 380;
 const MARGIN = 24;
+const PRELOAD_PATH = join(import.meta.dirname, "preload.cjs");
 
 function createWindow(): void {
   const { workArea } = screen.getPrimaryDisplay();
@@ -46,7 +47,7 @@ function createWindow(): void {
     skipTaskbar: true, // タスクバー/Dockに出さない
     focusable: true, // カスタムコンテキスト入力に備えてフォーカス可能に
     webPreferences: {
-      preload: join(__dirname, "preload.js"),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -59,7 +60,7 @@ function createWindow(): void {
   // ★Cluelyの肝: 画面共有・画面録画にこのウィンドウを映さない（設定で切替可能。config:setハンドラで即反映もする）
   win.setContentProtection(config.contentProtection);
 
-  win.loadFile(join(__dirname, "..", "renderer", "index.html"));
+  win.loadFile(join(import.meta.dirname, "..", "renderer", "index.html"));
 }
 
 /**
@@ -77,7 +78,7 @@ function openSettingsWindow(): void {
     height: 620,
     title: "KUROKO 設定",
     webPreferences: {
-      preload: join(__dirname, "preload.js"),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -85,7 +86,7 @@ function openSettingsWindow(): void {
   settingsWin.on("closed", () => {
     settingsWin = null;
   });
-  settingsWin.loadFile(join(__dirname, "..", "renderer", "settings.html"));
+  settingsWin.loadFile(join(import.meta.dirname, "..", "renderer", "settings.html"));
 }
 
 /**
@@ -102,7 +103,7 @@ function openContextWindow(): void {
     height: 640,
     title: "KUROKO コンテキスト",
     webPreferences: {
-      preload: join(__dirname, "preload.js"),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -110,7 +111,7 @@ function openContextWindow(): void {
   contextWin.on("closed", () => {
     contextWin = null;
   });
-  contextWin.loadFile(join(__dirname, "..", "renderer", "context.html"));
+  contextWin.loadFile(join(import.meta.dirname, "..", "renderer", "context.html"));
 }
 
 /** 開いている全ウィンドウへ同一イベントを送る。個別ハンドラでの送信先ベタ書きの増殖を防ぐ。 */

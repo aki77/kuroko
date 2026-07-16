@@ -4,11 +4,12 @@
   "private": true,
   "description": "文字起こしをリアルタイム監視し、会議中に補足情報や聞くべきことを提案するCluely風オーバーレイ",
   "main": "dist/main/main.js",
+  "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && pnpm run copy-renderer",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && pnpm run copy-renderer",
     "copy-renderer": "node scripts/copy-renderer.mjs",
     "start": "pnpm run build && env -u ELECTRON_RUN_AS_NODE electron .",
-    "dev": "tsc -w -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json & tsc -w -p tsconfig.preload.json & wait",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'"
   },

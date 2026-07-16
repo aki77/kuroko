@@ -1,7 +1,7 @@
 // レンダラ。preloadが公開する window.kuroko 経由でメインからイベントを受け取り、
 // 提案パネルを描画する。（プレーンJS。tscの対象外なのでdistへコピーされる）
 
-/** @type {import('../main/preload').KurokoApi} */
+/** @type {import('../main/preload.cts').KurokoApi} */
 const api = window.kuroko;
 
 const el = {

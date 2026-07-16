@@ -1,7 +1,7 @@
 // 設定ウィンドウ。preload共用の window.kuroko 経由で config:get/set を往復する。
 // （プレーンJS。tscの対象外なのでdistへコピーされる）
 
-/** @type {import('../main/preload').KurokoApi} */
+/** @type {import('../main/preload.cts').KurokoApi} */
 const api = window.kuroko;
 
 const form = document.getElementById("form");

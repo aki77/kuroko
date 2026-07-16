@@ -6,10 +6,10 @@ import type {
   Suggestion,
   SuggestionPartUpdate,
   SuggestionUpdate,
-} from "../shared/types";
-import { config } from "./config";
-import { generateSuggestion } from "./suggester";
-import { TranscriptWatcher } from "./watcher";
+} from "../shared/types.js";
+import { config } from "./config.js";
+import { generateSuggestion } from "./suggester.js";
+import { TranscriptWatcher } from "./watcher.js";
 
 /**
  * watcher → トリガー判定 → suggester → 提案更新 を統括する。

@@ -2,7 +2,7 @@
 // meetingContextはmain側で非永続化（起動ごとに空へリセット）。専用context:summarize IPC経路で確定する。
 // （プレーンJS。tscの対象外なのでdistへコピーされる）
 
-/** @type {import('../main/preload').KurokoApi} */
+/** @type {import('../main/preload.cts').KurokoApi} */
 const api = window.kuroko;
 
 const el = {

@@ -1,7 +1,7 @@
 import { appendFile, readFile, unlink, writeFile } from "node:fs/promises";
 import { unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { config } from "./config";
+import { config } from "./config.js";
 
 /**
  * 【開発用】過去の文字起こしjsonlを実タイムスタンプに沿って再生し、

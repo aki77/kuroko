@@ -5,7 +5,7 @@ import type {
   Status,
   SuggestionPartUpdate,
   SuggestionUpdate,
-} from "../shared/types";
+} from "../shared/types.js";
 
 /** レンダラに公開するAPI。contextIsolation下で安全に橋渡しする。 */
 const api = {

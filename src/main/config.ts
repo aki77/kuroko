@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Config, ConfigState, EditableConfig, EditableKey } from "../shared/types";
-import { EDITABLE_KEYS, FONT_SCALE_PRESETS } from "../shared/types";
+import type { Config, ConfigState, EditableConfig, EditableKey } from "../shared/types.js";
+import { EDITABLE_KEYS, FONT_SCALE_PRESETS } from "../shared/types.js";
 
 /** GUI編集対象外（env専用）も含む全項目の既定値 */
 const DEFAULTS: Config = {
