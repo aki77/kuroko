@@ -424,11 +424,27 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
         reject(new Error(`claude exited with code ${code}: ${stderr.trim()}`));
         return;
       }
-      let parsed: ClaudeJsonResult;
+      let raw: unknown;
       try {
-        parsed = JSON.parse(stdout) as ClaudeJsonResult;
+        raw = JSON.parse(stdout);
       } catch (err) {
         reject(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+      // ユーザーが verbose 設定（~/.claude.json の "verbose": true）を有効にしていると
+      // --output-format json は単一オブジェクトではなくイベント配列を返す。
+      // --setting-sources "" では防げない（~/.claude.json は設定ソース外の状態ファイル）ため、
+      // 配列なら type==="result" の要素を取り出す（通常の単一オブジェクトとも両対応）。
+      const parsed = (
+        Array.isArray(raw)
+          ? raw.find(
+              (e) =>
+                !!e && typeof e === "object" && (e as { type?: string }).type === "result",
+            )
+          : raw
+      ) as ClaudeJsonResult | undefined;
+      if (!parsed) {
+        reject(new Error("claude returned no result event"));
         return;
       }
       if (parsed.is_error) {
