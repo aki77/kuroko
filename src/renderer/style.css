@@ -310,6 +310,26 @@ body {
   margin-bottom: 6px;
   line-height: 1.4;
 }
+#topicHeader {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+#topicHeader:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.collapse-indicator {
+  font-size: 0.7em;
+  color: var(--fg-dim);
+  flex: none;
+}
+.topic-block.collapsed h1 {
+  margin-bottom: 0;
+}
 .block h2 {
   font-size: 10px; /* 見出しラベルはシェル扱い。本文優先でスケール対象外 */
   font-weight: 700;

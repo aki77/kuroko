@@ -52,7 +52,12 @@
         </div>
 
         <section class="block topic-block" id="topicBlock" hidden>
-          <h1 id="topic"></h1>
+          <h1>
+            <button type="button" id="topicHeader" aria-expanded="true">
+              <span class="collapse-indicator" id="summaryCaret" aria-hidden="true">▼</span>
+              <span id="topic"></span>
+            </button>
+          </h1>
           <p id="discussion"></p>
         </section>
 

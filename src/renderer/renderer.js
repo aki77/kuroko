@@ -9,6 +9,8 @@ const el = {
   statusLine: document.getElementById("statusLine"),
   empty: document.getElementById("empty"),
   topicBlock: document.getElementById("topicBlock"),
+  topicHeader: document.getElementById("topicHeader"),
+  summaryCaret: document.getElementById("summaryCaret"),
   topic: document.getElementById("topic"),
   discussion: document.getElementById("discussion"),
   questionsBlock: document.getElementById("questionsBlock"),
@@ -56,6 +58,31 @@ let liveDraft = null;
 // 情報量モード（集中／通常）。設定ウィンドウとも同期するためモジュールスコープで保持する
 let focusMode = false;
 
+// 要約本文（#discussion）の折りたたみ状態。保存はせず、モード切替・会議切替のたびに
+// デフォルト（集中=折りたたみ／通常=展開）へ戻す（同一会議内の新ラウンドでは維持する）。
+// summaryCollapsedTouchedはモード切替/会議切替までの間にユーザーが手動でヘッダをクリック
+// したかどうかを示し、trueの間はrenderTopicでのデフォルト再適用を抑止する（手動操作の
+// 意図をその間は尊重するため）。
+let summaryCollapsed = false;
+let summaryCollapsedTouched = false;
+
+function applySummaryCollapsed() {
+  el.discussion.hidden = summaryCollapsed;
+  el.topicBlock.classList.toggle("collapsed", summaryCollapsed);
+  el.summaryCaret.textContent = summaryCollapsed ? "▶" : "▼";
+  el.topicHeader.setAttribute("aria-expanded", String(!summaryCollapsed));
+}
+
+// 境界（会議切替・モード切替）で呼ぶ。手動開閉の意図はその間限りのため、
+// 境界を跨いだら破棄しデフォルト（focusMode連動）へ戻す。
+// 呼び出し側（resetHistory/applyFocusMode）で個別にsummaryCollapsedを書かずここへ集約する。
+// DOM反映（applySummaryCollapsed）まで含めて自己完結させ、呼び出し側が反映を呼び忘れないようにする。
+function resetSummaryCollapsed() {
+  summaryCollapsedTouched = false;
+  summaryCollapsed = focusMode;
+  applySummaryCollapsed();
+}
+
 el.refreshBtn.addEventListener("click", () => api.triggerNow());
 el.settingsBtn.addEventListener("click", () => api.openSettings());
 el.focusModeBtn.addEventListener("click", () => {
@@ -69,6 +96,12 @@ el.focusModeBtn.addEventListener("click", () => {
 el.historyPrevBtn.addEventListener("click", () => goToHistory(cursor - 1));
 el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
 el.historyUnseen.addEventListener("click", () => goToHistory(history.length - 1));
+
+el.topicHeader.addEventListener("click", () => {
+  summaryCollapsed = !summaryCollapsed;
+  summaryCollapsedTouched = true;
+  applySummaryCollapsed();
+});
 
 // ⌘系ショートカットはウィンドウローカル（オーバーレイにフォーカスがある時だけ効く）にまとめる。
 // 現状は履歴ナビ（⌘⇧←/→）専用。
@@ -302,6 +335,9 @@ function applyFocusMode(enabled) {
   focusMode = enabled === true;
   el.focusModeBtn.textContent = focusMode ? "🎯 集中" : "📋 通常";
   el.focusModeBtn.classList.toggle("active", focusMode);
+  // モード切替はデフォルト状態を決め直す契機。手動開閉の意図はリセットする
+  // （resetSummaryCollapsed内でDOM反映まで行う）
+  resetSummaryCollapsed();
 }
 
 // push通知: 設定ウィンドウでの変更をオーバーレイのボタン表示へ即反映する
@@ -323,6 +359,7 @@ function resetHistory() {
   cursor = -1;
   hasUnseenLatest = false;
   liveDraft = null;
+  resetSummaryCollapsed(); // DOM反映まで含めて行う（resetSummaryCollapsed参照）
   updateHistoryNav();
 }
 
@@ -371,6 +408,8 @@ function renderTopic(s) {
   el.topic.textContent = s.topic || "";
   el.discussion.textContent = s.discussion || "";
   el.topicBlock.hidden = !(s.topic || s.discussion);
+  if (!summaryCollapsedTouched) summaryCollapsed = focusMode;
+  applySummaryCollapsed();
 }
 
 function renderQuestions(s) {
