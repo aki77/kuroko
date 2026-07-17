@@ -4,10 +4,13 @@ import {
   BrowserWindow,
   globalShortcut,
   ipcMain,
+  Menu,
+  type MenuItemConstructorOptions,
   screen,
   shell,
 } from "electron";
 import type {
+  DebugEvent,
   EditableConfig,
   Status,
   SuggestionPartUpdate,
@@ -22,6 +25,7 @@ import {
   loadConfig,
   setFocusMode,
 } from "./config.js";
+import { bridgeToDebugLog, debugLog } from "./debug-log.js";
 import { Orchestrator } from "./orchestrator.js";
 import { Replayer } from "./replayer.js";
 import { readSettings, writeSettings } from "./settings-store.js";
@@ -33,6 +37,7 @@ import {
 let win: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
 let contextWin: BrowserWindow | null = null;
+let debugWin: BrowserWindow | null = null;
 let orchestrator: Orchestrator | null = null;
 let replayer: Replayer | null = null;
 let clickThrough = false;
@@ -74,58 +79,84 @@ function createWindow(): void {
 }
 
 /**
- * 設定ウィンドウを開く。オーバーレイと違い普通のフレーム付き通常ウィンドウ
- * （transparent/alwaysOnTop/contentProtection は付けない）。多重生成はガードする。
- * preload は overlay と共用（設定側で使わないAPIも生えるが無害）。
+ * オーバーレイと違う普通のフレーム付き通常ウィンドウ（settings/context/debug）を開く共通処理。
+ * transparent/alwaysOnTop/contentProtection は付けず、preload は overlay と共用する
+ * （各ウィンドウで使わないAPIも生えるが無害）。多重生成は呼び出し側の existing で防ぐ。
+ * onReady は初回ロード完了時の追加処理（例: デバッグウィンドウのsnapshot流し込み）に使う。
  */
-function openSettingsWindow(): void {
-  if (settingsWin) {
-    settingsWin.focus();
-    return;
+function openManagedWindow(
+  existing: BrowserWindow | null,
+  opts: {
+    width: number;
+    height: number;
+    title: string;
+    file: string;
+    onClosed: () => void;
+    onReady?: (w: BrowserWindow) => void;
+  },
+): BrowserWindow {
+  if (existing) {
+    existing.focus();
+    return existing;
   }
-  settingsWin = new BrowserWindow({
+  const w = new BrowserWindow({
+    width: opts.width,
+    height: opts.height,
+    title: opts.title,
+    webPreferences: {
+      preload: PRELOAD_PATH,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  w.on("closed", opts.onClosed);
+  if (opts.onReady) {
+    w.webContents.once("did-finish-load", () => opts.onReady?.(w));
+  }
+  w.loadFile(join(import.meta.dirname, "..", "renderer", opts.file));
+  return w;
+}
+
+function openSettingsWindow(): void {
+  settingsWin = openManagedWindow(settingsWin, {
     width: 480,
     height: 620,
     title: "KUROKO 設定",
-    webPreferences: {
-      preload: PRELOAD_PATH,
-      contextIsolation: true,
-      nodeIntegration: false,
+    file: "settings.html",
+    onClosed: () => {
+      settingsWin = null;
     },
   });
-  settingsWin.on("closed", () => {
-    settingsWin = null;
-  });
-  settingsWin.loadFile(
-    join(import.meta.dirname, "..", "renderer", "settings.html"),
-  );
 }
 
-/**
- * 会議コンテキスト（アジェンダ・資料）専用ウィンドウを開く。settingsWin/openSettingsWindow と同型。
- * 長文の貼り付け・確認を行うため設定ウィンドウより広めのサイズにする。
- */
+/** 長文の貼り付け・確認を行うため設定ウィンドウより広めのサイズにする。 */
 function openContextWindow(): void {
-  if (contextWin) {
-    contextWin.focus();
-    return;
-  }
-  contextWin = new BrowserWindow({
+  contextWin = openManagedWindow(contextWin, {
     width: 560,
     height: 640,
     title: "KUROKO コンテキスト",
-    webPreferences: {
-      preload: PRELOAD_PATH,
-      contextIsolation: true,
-      nodeIntegration: false,
+    file: "context.html",
+    onClosed: () => {
+      contextWin = null;
     },
   });
-  contextWin.on("closed", () => {
-    contextWin = null;
+}
+
+/**
+ * デバッグウィンドウ（開発・動作確認用）。開いた直後に debugLog.snapshot() を流し込み
+ * 直近バッファを復元する。以降のライブ配信は wireOrchestrator 隣の debugLog.on("event", ...) が担う。
+ */
+function openDebugWindow(): void {
+  debugWin = openManagedWindow(debugWin, {
+    width: 720,
+    height: 640,
+    title: "KUROKO デバッグ",
+    file: "debug.html",
+    onClosed: () => {
+      debugWin = null;
+    },
+    onReady: (w) => w.webContents.send("debug:snapshot", debugLog.snapshot()),
   });
-  contextWin.loadFile(
-    join(import.meta.dirname, "..", "renderer", "context.html"),
-  );
 }
 
 /** 開いている全ウィンドウへ同一イベントを送る。個別ハンドラでの送信先ベタ書きの増殖を防ぐ。 */
@@ -146,6 +177,10 @@ async function wireOrchestrator(): Promise<void> {
   orchestrator.on("status", (s: Status) => {
     win?.webContents.send("status", s);
   });
+  // デバッグウィンドウへのライブ配信。debugWinが無ければ何もしない（バッファには積まれ続ける）
+  debugLog.on("event", (ev: DebugEvent) => {
+    debugWin?.webContents.send("debug:event", ev);
+  });
   await orchestrator.start(); // ready完了まで待つ（chokidarのignoreInitial:trueとの競合回避）
 
   if (config.replayFile) {
@@ -159,6 +194,87 @@ async function wireOrchestrator(): Promise<void> {
     process.once("SIGINT", cleanup);
     process.once("SIGTERM", cleanup);
   }
+}
+
+/**
+ * アプリメニューを構築する。Electron既定メニュー（Manually creating the default menu）
+ * 同等の構成を土台にし、「表示」メニューの末尾にのみ
+ * 「デバッグウィンドウを開く」項目（accelerator無し）を追加する。
+ */
+function buildMenu(): Menu {
+  const isMac = process.platform === "darwin";
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" as const },
+              { type: "separator" as const },
+              { role: "services" as const },
+              { type: "separator" as const },
+              { role: "hide" as const },
+              { role: "hideOthers" as const },
+              { role: "unhide" as const },
+              { type: "separator" as const },
+              { role: "quit" as const },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: "編集",
+      submenu: [
+        { role: "undo" as const },
+        { role: "redo" as const },
+        { type: "separator" as const },
+        { role: "cut" as const },
+        { role: "copy" as const },
+        { role: "paste" as const },
+        { role: "selectAll" as const },
+      ],
+    },
+    {
+      label: "表示",
+      submenu: [
+        { role: "reload" as const },
+        { role: "forceReload" as const },
+        { role: "toggleDevTools" as const },
+        { type: "separator" as const },
+        { role: "resetZoom" as const },
+        { role: "zoomIn" as const },
+        { role: "zoomOut" as const },
+        { type: "separator" as const },
+        { role: "togglefullscreen" as const },
+        { type: "separator" as const },
+        {
+          label: "デバッグウィンドウを開く",
+          click: () => openDebugWindow(),
+        },
+      ],
+    },
+    {
+      label: "ウィンドウ",
+      submenu: [
+        { role: "minimize" as const },
+        { role: "zoom" as const },
+        ...(isMac
+          ? [
+              { type: "separator" as const },
+              { role: "front" as const },
+              { type: "separator" as const },
+              { role: "window" as const },
+            ]
+          : [{ role: "close" as const }]),
+      ],
+    },
+    {
+      label: "ヘルプ",
+      role: "help" as const,
+      submenu: [],
+    },
+  ];
+  return Menu.buildFromTemplate(template);
 }
 
 function registerShortcuts(): void {
@@ -256,7 +372,7 @@ ipcMain.handle("context:summarize", async (_e, raw: unknown) => {
 
   if (trimmed && trimmed.length > CONTEXT_SUMMARIZE_THRESHOLD) {
     try {
-      value = await summarizeMeetingContext(text);
+      value = await summarizeMeetingContext(text, bridgeToDebugLog);
       summarized = true;
     } catch (err) {
       console.warn("context summarize failed:", err);
@@ -276,6 +392,7 @@ app.whenReady().then(async () => {
   loadConfig(readSettings());
 
   createWindow();
+  Menu.setApplicationMenu(buildMenu());
   await wireOrchestrator();
   registerShortcuts();
 

@@ -1,10 +1,14 @@
 import { EventEmitter } from "node:events";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Cue } from "../shared/types.js";
 import { config } from "./config.js";
+import { debugLog } from "./debug-log.js";
 import { isStaleLatest } from "./watcher-stale.js";
+
+/** デバッグウィンドウの cues イベント detail に載せる末尾発話件数（表示用の上限） */
+const DEBUG_CUE_TAIL = 30;
 
 /**
  * 文字起こし用ディレクトリ（config.transcriptDir）を監視し、「最新のjsonl = 進行中のミーティング」を
@@ -51,7 +55,7 @@ export class TranscriptWatcher extends EventEmitter {
     );
     const latest = await this.findLatest();
     if (!latest) {
-      if (!this.currentFile) this.emit("no-meeting");
+      if (!this.currentFile) this.emitNoMeeting();
       return;
     }
     if (
@@ -59,12 +63,18 @@ export class TranscriptWatcher extends EventEmitter {
     ) {
       // 古い最新ファイル: 会議にはしないが、追記されたら会議開始できるよう監視する
       if (!this.currentFile) {
-        this.emit("no-meeting");
+        this.emitNoMeeting();
         this.watchStale(latest.path, latest.mtimeMs);
       }
     } else if (latest.path !== this.currentFile) {
       await this.switchTo(latest.path, latest.mtimeMs);
     }
+  }
+
+  /** "no-meeting" のemitとデバッグログ通知を1箇所にまとめる（起動時の2箇所で同一文言を重複させないため） */
+  private emitNoMeeting(): void {
+    this.emit("no-meeting");
+    debugLog.push("watcher", "info", "no-meeting", "進行中の会議なし（待機）");
   }
 
   /** 監視対象を指定ファイルに切り替え、内容更新を監視する */
@@ -74,6 +84,7 @@ export class TranscriptWatcher extends EventEmitter {
     this.currentMtimeMs = mtimeMs;
 
     this.emit("meeting", file);
+    debugLog.push("watcher", "info", "meeting", `会議切替: ${basename(file)}`);
     await this.emitCues(file); // 初回読み込み
 
     this.watchFile(file, () => void this.emitCues(file));
@@ -102,9 +113,21 @@ export class TranscriptWatcher extends EventEmitter {
     try {
       const cues = await parseTranscript(file);
       this.emit("cues", file, cues);
+      const tail = cues
+        .slice(-DEBUG_CUE_TAIL)
+        .map((c) => `${c.speaker}: ${c.text}`)
+        .join("\n");
+      debugLog.push("watcher", "info", "cues", `発話 ${cues.length}件`, tail);
     } catch (err) {
       // 読み込み途中の追記と競合することがあるが、次のchangeで回復するので握りつぶす
       console.error("[watcher] parse error:", err);
+      debugLog.push(
+        "watcher",
+        "warn",
+        "parse-error",
+        "文字起こしパース失敗（次回changeで回復見込み）",
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 

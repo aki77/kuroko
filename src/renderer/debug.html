@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KUROKO デバッグ</title>
+    <link rel="stylesheet" href="debug.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="debug-header">
+        <h1>デバッグログ</h1>
+        <div class="debug-filters">
+          <label>
+            source:
+            <select id="sourceFilter">
+              <option value="">すべて</option>
+              <option value="watcher">watcher</option>
+              <option value="orchestrator">orchestrator</option>
+              <option value="suggester">suggester</option>
+            </select>
+          </label>
+          <label>
+            level:
+            <select id="levelFilter">
+              <option value="">すべて</option>
+              <option value="info">info</option>
+              <option value="warn">warn</option>
+              <option value="error">error</option>
+            </select>
+          </label>
+          <button id="clearBtn" type="button">クリア</button>
+        </div>
+      </header>
+
+      <ul id="log" class="debug-log"></ul>
+    </div>
+    <script src="debug.js"></script>
+  </body>
+</html>

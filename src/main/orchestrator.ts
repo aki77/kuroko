@@ -8,8 +8,31 @@ import type {
   SuggestionUpdate,
 } from "../shared/types.js";
 import { config } from "./config.js";
+import { bridgeToDebugLog, debugLog } from "./debug-log.js";
 import { generateSuggestion } from "./suggester.js";
 import { TranscriptWatcher } from "./watcher.js";
+
+/**
+ * Status を1行サマリに整形する（デバッグログ用）。
+ * defaultを置かず全kindを列挙することで、Status に新kindを追加したときにここも
+ * 更新漏れがあればコンパイルエラーで気づける（網羅性チェック）。
+ */
+function describeStatus(s: Status): string {
+  switch (s.kind) {
+    case "waiting":
+      return `waiting (${s.pendingCues}/${s.needed}件)`;
+    case "error":
+      return `error: ${s.message}`;
+    case "idle":
+    case "querying":
+    case "no-meeting":
+      return s.kind;
+    default: {
+      const exhaustive: never = s;
+      return exhaustive;
+    }
+  }
+}
 
 /**
  * watcher → トリガー判定 → suggester → 提案更新 を統括する。
@@ -48,9 +71,7 @@ export class Orchestrator extends EventEmitter {
 
   /** 現在の this.watcher にリスナを登録する。watcher差し替え時にも再利用する */
   private bindWatcher(): void {
-    this.watcher.on("no-meeting", () =>
-      this.emit("status", { kind: "no-meeting" }),
-    );
+    this.watcher.on("no-meeting", () => this.setStatus({ kind: "no-meeting" }));
 
     this.watcher.on("meeting", (file) => {
       // 新しいミーティングに切り替わったら状態をリセット。
@@ -61,7 +82,7 @@ export class Orchestrator extends EventEmitter {
       this.cueCountAtLastRun = 0;
       this.latestCues = [];
       this.pendingTrigger = false;
-      this.emit("status", { kind: "idle" });
+      this.setStatus({ kind: "idle" });
     });
 
     this.watcher.on("cues", (file, cues) => {
@@ -69,6 +90,20 @@ export class Orchestrator extends EventEmitter {
       this.latestCues = cues;
       this.scheduleMaybeRun();
     });
+  }
+
+  /**
+   * status の emit とデバッグログ通知を1箇所にまとめる。両者を毎回手書きペアで
+   * 散らすと対応漏れが起きやすいため、状態遷移箇所はすべてここを経由させる。
+   */
+  private setStatus(status: Status): void {
+    this.emit("status", status);
+    debugLog.push(
+      "orchestrator",
+      status.kind === "error" ? "error" : "info",
+      "status",
+      describeStatus(status),
+    );
   }
 
   /**
@@ -98,15 +133,22 @@ export class Orchestrator extends EventEmitter {
     if (this.generating) {
       // 生成中は破棄せず予約し、完了後に確実に再生成する
       this.pendingTrigger = true;
+      debugLog.push(
+        "orchestrator",
+        "info",
+        "trigger",
+        "手動トリガー（生成中のため予約）",
+      );
       return;
     }
+    debugLog.push("orchestrator", "info", "trigger", "手動トリガー");
     void this.run();
   }
 
   private scheduleMaybeRun(): void {
     const pending = this.latestCues.length - this.cueCountAtLastRun;
     if (pending < config.triggerCueCount) {
-      this.emit("status", {
+      this.setStatus({
         kind: "waiting",
         pendingCues: Math.max(0, pending),
         needed: config.triggerCueCount,
@@ -125,7 +167,13 @@ export class Orchestrator extends EventEmitter {
     const file = this.currentFile; // このrunが対象とする会議を固定する
     this.generating = true;
     this.cueCountAtLastRun = this.latestCues.length;
-    this.emit("status", { kind: "querying" });
+    this.setStatus({ kind: "querying" });
+    debugLog.push(
+      "orchestrator",
+      "info",
+      "run-start",
+      `対象=${basename(file)}, cue=${this.latestCues.length}`,
+    );
 
     try {
       const { suggestion, durationMs, costUsd } = await generateSuggestion(
@@ -135,6 +183,7 @@ export class Orchestrator extends EventEmitter {
           if (this.currentFile !== file) return; // 会議切替済みの古い部分は破棄
           this.emit("suggestion-part", { part, meetingFile: basename(file) });
         },
+        bridgeToDebugLog,
       );
 
       // 生成中に会議が切り替わっていたら、この提案は古いので破棄する
@@ -151,10 +200,10 @@ export class Orchestrator extends EventEmitter {
         cumulativeCostUsd: this.cumulativeCostUsd,
       };
       this.emit("suggestion", update);
-      this.emit("status", { kind: "idle" });
+      this.setStatus({ kind: "idle" });
     } catch (err) {
       if (this.currentFile !== file) return; // 会議が変わっていればエラーも無視
-      this.emit("status", {
+      this.setStatus({
         kind: "error",
         message: err instanceof Error ? err.message : String(err),
       });

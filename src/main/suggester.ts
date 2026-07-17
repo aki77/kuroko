@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type {
   CodeNote,
   Cue,
+  OnDebug,
   Suggestion,
   SuggestionPartial,
   WebNote,
@@ -199,7 +200,10 @@ export const CONTEXT_SUMMARIZE_THRESHOLD = 2000;
  * 会議ごとの事前コンテキスト（アジェンダ・資料）が長い場合に、claude -p で一度だけ要約する。
  * generateSuggestion と同様、呼び出し前に claudeCwd を用意する。
  */
-export async function summarizeMeetingContext(raw: string): Promise<string> {
+export async function summarizeMeetingContext(
+  raw: string,
+  onDebug?: OnDebug,
+): Promise<string> {
   await mkdir(config.claudeCwd, { recursive: true });
   const task: ClaudeTask = {
     prompt: raw,
@@ -208,8 +212,9 @@ export async function summarizeMeetingContext(raw: string): Promise<string> {
     allowedTools: [],
     model: config.model,
     timeoutMs: config.claudeTimeoutSec * 1000,
+    label: "context-summary",
   };
-  const result = await runClaude(task);
+  const result = await runClaude(task, onDebug);
   const o = result.structured as Record<string, unknown> | undefined;
   if (!o || typeof o.summary !== "string") {
     throw new Error("claude returned no structured_output for context summary");
@@ -245,6 +250,8 @@ interface ClaudeTask {
   timeoutMs: number;
   /** cwd外の参照を許可する追加ディレクトリ（--add-dir）。Cで自プロジェクトを読ませるのに使う */
   addDirs?: string[];
+  /** デバッグログ表示用のタスク種別ラベル（プロンプト由来の推測を避けるため呼び出し側で明示指定） */
+  label: "summary" | "web" | "code" | "context-summary";
 }
 
 interface ClaudeRunResult {
@@ -275,6 +282,7 @@ export async function generateSuggestion(
   cues: Cue[],
   previous: Suggestion | null,
   onPartial?: (part: SuggestionPartial) => void,
+  onDebug?: OnDebug,
 ): Promise<SuggestResult> {
   await mkdir(config.claudeCwd, { recursive: true });
   const startedAt = Date.now();
@@ -323,6 +331,7 @@ export async function generateSuggestion(
     schema: SUMMARY_SCHEMA,
     allowedTools: [],
     timeoutMs: config.claudeTimeoutSec * 1000,
+    label: "summary",
   };
   const webTask: ClaudeTask = {
     ...baseTask,
@@ -331,11 +340,12 @@ export async function generateSuggestion(
     schema: buildWebSchema(focusMode),
     allowedTools: ["WebSearch"],
     timeoutMs: config.claudeWebTimeoutSec * 1000,
+    label: "web",
   };
 
   // 真の依存関係は A→C（CはAのneedsCode/codeQueryにのみ依存）、B はA/Cと独立。
   // Bチェーンはここで走らせて await せず保持しておく（A+Cチェーンと並行実行させるため）。
-  const webPromise = runClaude(webTask);
+  const webPromise = runClaude(webTask, onDebug);
   webPromise
     .then((r) => onPartial?.({ kind: "web", data: toWeb(r.structured) }))
     .catch(() => {
@@ -346,7 +356,7 @@ export async function generateSuggestion(
   // generateSuggestion内のローカル変数（transcript/previous/focusMode等）をクロージャで
   // そのまま参照するためIIFEにしている（名前付き関数に外出しすると引数受け渡しが増えるだけ）。
   const acChain = (async () => {
-    const summaryResult = await runClaude(summaryTask);
+    const summaryResult = await runClaude(summaryTask, onDebug);
     const summaryRaw = summaryResult.structured;
     const summary = toSummary(summaryRaw);
     onPartial?.({ kind: "summary", data: summary });
@@ -354,6 +364,12 @@ export async function generateSuggestion(
     // C（コード参照）はAの判定(needsCode)に依存する逐次実行。
     // needsCodeがtrueかつprojectDirが設定済みのときだけ発火する（LLM判断駆動、無駄な探索を避ける）
     const { needsCode, codeQuery } = toCodeDecision(summaryRaw);
+    onDebug?.({
+      source: "suggester",
+      level: "info",
+      kind: "decision",
+      message: `needsCode=${needsCode} query=${codeQuery}`,
+    });
     let codeResult: ClaudeRunResult = EMPTY_RESULT;
     // toCode()はgit系の同期I/O(execFileSync)を含むため、onPartial通知用と戻り値用で
     // 2回呼ぶと同じ入力に対して同期処理が倍発生する。1回だけ呼んで両方で使い回す
@@ -367,9 +383,10 @@ export async function generateSuggestion(
         allowedTools: ["Read", "Grep", "Glob"],
         timeoutMs: config.claudeCodeTimeoutSec * 1000,
         addDirs: [config.projectDir],
+        label: "code",
       };
       try {
-        codeResult = await runClaude(codeTask);
+        codeResult = await runClaude(codeTask, onDebug);
         codeNotes = toCode(codeResult.structured);
         onPartial?.({ kind: "code", data: codeNotes });
       } catch (err) {
@@ -597,7 +614,11 @@ function resolveClaudeBin(): string {
 }
 
 /** claude -p をタスク定義に従いサブプロセスで実行し、構造化出力・所要時間・コストを返す */
-function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
+function runClaude(
+  task: ClaudeTask,
+  onDebug?: OnDebug,
+): Promise<ClaudeRunResult> {
+  const label = task.label;
   return new Promise((resolve, reject) => {
     const args = [
       "-p",
@@ -631,6 +652,29 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
       JSON.stringify(task.schema),
     );
 
+    // source:"suggester" 固定でlevel/kindだけ変える定型を1点に集約（呼び出し4箇所の重複を排除）
+    const emit = (
+      level: "info" | "warn" | "error",
+      kind: string,
+      message: string,
+      detail?: string,
+    ): void => {
+      onDebug?.({
+        source: "suggester",
+        level,
+        kind,
+        message: `${label}: ${message}`,
+        ...(detail !== undefined ? { detail } : {}),
+      });
+    };
+
+    emit(
+      "info",
+      "task-start",
+      `開始 (model=${task.model})`,
+      `${task.prompt}\n---\n${task.systemPrompt}`,
+    );
+
     const child = spawn(resolveClaudeBin(), args, {
       cwd: config.claudeCwd, // 空ディレクトリ。CLAUDE.md自動探索を回避
       stdio: ["ignore", "pipe", "pipe"], // stdinはignore（stdin待ちを防ぐ）
@@ -644,18 +688,32 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
 
+    // 決着済みフラグ。SIGKILL後もcloseは非同期に発火するため、
+    // タイムアウト/起動エラーで一度reject済みの経路にcloseが重ねてfailするのを防ぐ
+    // （1タスク＝1ライフサイクルという可視化の前提を守る）。
+    let settled = false;
+    const fail = (message: string, detail?: string): void => {
+      if (settled) return;
+      settled = true;
+      emit("error", "task-error", message, detail);
+    };
+
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
+      fail(`タイムアウト (${task.timeoutMs}ms)`);
       reject(new Error(`claude timed out after ${task.timeoutMs}ms`));
     }, task.timeoutMs);
 
     child.on("error", (err) => {
       clearTimeout(timer);
+      fail("プロセス起動エラー", err.message);
       reject(err);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (settled) return;
       if (code !== 0) {
+        fail(`exit code ${code}`, stderr.trim());
         reject(new Error(`claude exited with code ${code}: ${stderr.trim()}`));
         return;
       }
@@ -663,15 +721,27 @@ function runClaude(task: ClaudeTask): Promise<ClaudeRunResult> {
       try {
         parsed = JSON.parse(stdout) as ClaudeJsonResult;
       } catch (err) {
+        fail(
+          "JSON parse失敗",
+          err instanceof Error ? err.message : String(err),
+        );
         reject(err instanceof Error ? err : new Error(String(err)));
         return;
       }
       if (parsed.is_error) {
+        fail("claude returned error", parsed.result);
         reject(
           new Error(`claude returned error: ${parsed.result ?? "unknown"}`),
         );
         return;
       }
+      settled = true;
+      emit(
+        "info",
+        "task-done",
+        `完了 ${parsed.duration_ms}ms $${parsed.total_cost_usd.toFixed(4)}`,
+        JSON.stringify(parsed.structured_output, null, 2),
+      );
       resolve({
         structured: parsed.structured_output,
         durationMs: parsed.duration_ms,

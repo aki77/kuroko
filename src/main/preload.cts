@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   ConfigState,
+  DebugEvent,
   EditableConfig,
   Status,
   SuggestionPartUpdate,
@@ -62,6 +63,13 @@ const api = {
   // オーバーレイの集中モードボタン専用（設定画面/envとは無関係・非永続化）
   setFocusMode(enabled: boolean): void {
     ipcRenderer.send("focus-mode:set", enabled);
+  },
+  // --- デバッグウィンドウ専用 ---
+  onDebugSnapshot(cb: (events: DebugEvent[]) => void): void {
+    ipcRenderer.on("debug:snapshot", (_e, evs: DebugEvent[]) => cb(evs));
+  },
+  onDebugEvent(cb: (ev: DebugEvent) => void): void {
+    ipcRenderer.on("debug:event", (_e, ev: DebugEvent) => cb(ev));
   },
 };
 

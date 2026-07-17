@@ -84,6 +84,33 @@ export type Status =
   | { kind: "no-meeting" };
 
 /**
+ * デバッグウィンドウ専用のログイベント。オーバーレイの Status/suggestion 経路とは独立で、
+ * watcher/orchestrator/suggester の内部処理過程を可視化するためだけに使う。
+ * kind は厳密unionにせず string にして UI 側と計装箇所を疎結合に保つ（拡張しやすさ優先）。
+ */
+export interface DebugEvent {
+  /** ISO文字列。Date.now()回避のため生成側（main）で付与 */
+  at: string;
+  /** ログ発生源 */
+  source: "watcher" | "orchestrator" | "suggester";
+  /** 深刻度（UIの色分け用） */
+  level: "info" | "warn" | "error";
+  /** 種別。UIのフィルタ/整形に使う */
+  kind: string; // 例: "meeting" | "cues" | "status" | "task-start" | "task-done" | "task-error" | "prompt" | "output" | "parse-error"
+  /** 1行サマリ（タイムラインに常時表示） */
+  message: string;
+  /** 展開時に見せる詳細（prompt本文・structured出力・Cue一覧など。長文可） */
+  detail?: string;
+}
+
+/**
+ * デバッグ計装イベントを受け取るコールバック型。`at`（生成時刻）は橋渡し側（main/debug-log.ts）で
+ * 付与するため計装側は渡さない。suggester など純粋性を保ちたいモジュールが DebugLog 実体に
+ * 依存せずこの型だけを受け取れるよう、共有の types に置く。
+ */
+export type OnDebug = (ev: Omit<DebugEvent, "at">) => void;
+
+/**
  * オーバーレイ文字サイズのプリセット3択。settings.htmlのoption値・⌘+/⌘-の段階送り双方が
  * ここを唯一の情報源として参照する（値を変える場合は settings.html の option も合わせて直すこと）。
  */
