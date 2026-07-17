@@ -404,9 +404,40 @@ body {
   color: var(--web-accent);
 }
 .web-item {
+  position: relative;
   margin-bottom: 12px;
   padding-left: 12px;
   border-left: 2px solid rgba(143, 224, 176, 0.35);
+}
+.web-copy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(143, 224, 176, 0.15);
+  color: var(--web-accent);
+  font-size: 0.7rem;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.web-copy::before {
+  content: "⧉";
+}
+.web-copy--done::before {
+  content: "✓";
+}
+.web-item:hover .web-copy {
+  opacity: 1;
+}
+.web-copy:hover {
+  background: rgba(143, 224, 176, 0.3);
 }
 /* details（詳細ポップオーバー）を持つ項目だけ、ホバー可能であることを控えめに示す */
 .web-item--has-details {

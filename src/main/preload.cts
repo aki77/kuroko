@@ -28,6 +28,9 @@ const api = {
   openExternal(url: string): void {
     ipcRenderer.send("open-external", url);
   },
+  copyToClipboard(text: string): void {
+    ipcRenderer.send("clipboard:write", text);
+  },
   // --- 設定（設定ウィンドウで使用。オーバーレイ側では未使用） ---
   getConfig(): Promise<ConfigState> {
     return ipcRenderer.invoke("config:get");

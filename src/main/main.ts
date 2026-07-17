@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   app,
   BrowserWindow,
+  clipboard,
   globalShortcut,
   ipcMain,
   Menu,
@@ -299,6 +300,15 @@ ipcMain.on("trigger-now", () => orchestrator?.triggerNow());
 ipcMain.on("open-external", (_e, url: unknown) => {
   if (isHttpsUrl(url)) {
     shell.openExternal(url);
+  }
+});
+
+// レンダラからのクリップボード書き込み要求（FROM THE WEBのリンクコピー専用）。
+// 現時点でコピー対象はURLのみのため、open-externalと同じisHttpsUrlで検証する。
+// URL以外の文字列をコピーする用途が増えたら、この関数を流用せず専用の検証に分けること。
+ipcMain.on("clipboard:write", (_e, text: unknown) => {
+  if (isHttpsUrl(text)) {
+    clipboard.writeText(text);
   }
 });
 

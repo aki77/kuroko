@@ -493,6 +493,10 @@ function renderWeb(s) {
       detail.textContent = w.detail;
       item.append(title, detail);
 
+      if (w.url) {
+        item.appendChild(createWebCopyButton(w.url));
+      }
+
       if (details.length > 0) {
         item.classList.add("web-item--has-details");
         item.addEventListener("mouseenter", (e) => showWebPopover(details, e));
@@ -614,6 +618,9 @@ function showWebPopover(details, e) {
 }
 
 function positionWebPopover(e) {
+  // コピーボタン上ではポップオーバーの追従を止め、代わりにツールチップの
+  // ホバーデリゲーション（document.body側のmousemove）にそのまま委ねる
+  if (e.target.closest(".web-copy")) return;
   const { x, y } = computeHoverPosition(e, webPopoverRect);
   el.webPopover.style.left = `${x}px`;
   el.webPopover.style.top = `${y}px`;
@@ -621,6 +628,24 @@ function positionWebPopover(e) {
 
 function hideWebPopover() {
   el.webPopover.hidden = true;
+}
+
+/**
+ * FROM THE WEB の各項目にホバー表示するリンクコピー用ボタンを作る。
+ */
+function createWebCopyButton(url) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "web-copy";
+  btn.dataset.tooltip = "リンクをコピー";
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    api.copyToClipboard(url);
+    btn.classList.add("web-copy--done");
+    showTooltip("コピーしました", e);
+    setTimeout(() => btn.classList.remove("web-copy--done"), 1200);
+  });
+  return btn;
 }
 
 /**
