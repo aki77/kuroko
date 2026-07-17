@@ -511,8 +511,8 @@ function truncate(str, n) {
 
 let tooltipRect = null; // 表示中はサイズ不変なのでmousemove毎の強制リフローを避けるためキャッシュ
 
-function showTooltip(url, e) {
-  el.urlTooltip.textContent = url;
+function showTooltip(text, e) {
+  el.urlTooltip.textContent = text;
   el.urlTooltip.hidden = false;
   tooltipRect = el.urlTooltip.getBoundingClientRect();
   positionTooltip(e);
@@ -537,7 +537,8 @@ function hideTooltip() {
 /**
  * url があれば自前ツールチップ(URL表示)付きの<a>を、無ければ<div>を作る。
  * FROM THE WEB / FROM THE CODE の両方でリンク化ロジックを共通化するためのヘルパー。
- * ネイティブtitle属性はオーバーレイの背後に隠れるため自前ツールチップで表示する。
+ * ツールチップ表示自体は data-tooltip 経由でデリゲーション（後述）に委ね、
+ * ここでは click（外部ブラウザで開く）ハンドラのみを個別に持つ。
  */
 function createLinkableElement(baseClassName, linkClassName, url) {
   if (!url) {
@@ -548,12 +549,40 @@ function createLinkableElement(baseClassName, linkClassName, url) {
   const a = document.createElement("a");
   a.className = `${baseClassName} ${linkClassName}`;
   a.href = "#";
-  a.addEventListener("mouseenter", (e) => showTooltip(url, e));
-  a.addEventListener("mousemove", (e) => positionTooltip(e));
-  a.addEventListener("mouseleave", hideTooltip);
+  a.dataset.tooltip = url;
   a.addEventListener("click", (e) => {
     e.preventDefault();
     api.openExternal(url);
   });
   return a;
 }
+
+// [data-tooltip] を持つ要素（静的なタイトルバー等のボタン・ロックアイコンと、
+// 動的生成されるFROM THE WEB/CODEのリンク）のツールチップ表示を1箇所に集約する。
+// 個別にmouseenter/mousemove/mouseleaveを貼ると要素追加のたびに登録漏れが起きうるため、
+// document.bodyへのイベントデリゲーションで一括処理する。
+// .url-tooltip自身はpointer-events:noneのためclosestの対象に上がらず干渉しない。
+// なおdisabled中のbuttonはmouseover等が発火しないためツールチップも出ないが、
+// historyPrevBtn/historyNextBtn（updateHistoryNav()参照）は非活性時にホバー説明が
+// 見えなくても仕様上問題ないため、native title属性へのフォールバック等は行わない。
+let currentTooltipTarget = null;
+
+document.body.addEventListener("mouseover", (e) => {
+  const target = e.target.closest("[data-tooltip]");
+  if (!target || target === currentTooltipTarget) return;
+  currentTooltipTarget = target;
+  showTooltip(target.dataset.tooltip, e);
+});
+
+document.body.addEventListener("mousemove", (e) => {
+  // mouseoverの時点で対象はcurrentTooltipTargetに確定済みのため、ここでのcontains再判定は不要
+  if (currentTooltipTarget) positionTooltip(e);
+});
+
+document.body.addEventListener("mouseout", (e) => {
+  if (!currentTooltipTarget) return;
+  // relatedTarget（移動先）が引き続き同じdata-tooltip要素の内側ならまだ離脱していない
+  if (e.relatedTarget && currentTooltipTarget.contains(e.relatedTarget)) return;
+  currentTooltipTarget = null;
+  hideTooltip();
+});

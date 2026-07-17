@@ -509,8 +509,10 @@ body.click-through .panel {
   opacity: 0.55;
 }
 
-/* URLホバー用ツールチップ。ネイティブtitle属性はalwaysOnTop透過ウィンドウの
-   背後に描画されて見えなくなるため、DOM内に自前描画してパネルより前面に出す */
+/* 汎用ホバー用ツールチップ（URLリンク・タイトルバーのボタン・ロックアイコン等）。
+   ネイティブtitle属性はalwaysOnTop透過ウィンドウの背後に描画されて見えなくなるため、
+   [data-tooltip]要素はDOM内に自前描画してパネルより前面に出す（renderer.jsのイベント
+   デリゲーションで一括制御）*/
 .url-tooltip {
   position: fixed;
   z-index: 1000;
