@@ -34,6 +34,15 @@
           <span class="hint">オーバーレイの文字サイズ</span>
         </label>
 
+        <label class="field" data-key="panelOpacity">
+          <span class="label">背景の不透明度</span>
+          <!-- min/max は PANEL_OPACITY_MIN/MAX * 100（src/shared/types.ts）。UIは%整数・内部値は小数。 -->
+          <input type="range" name="panelOpacity" min="30" max="90" step="2" />
+          <output class="range-value" for="panelOpacity"></output>
+          <span class="lock-badge" hidden>envで固定中</span>
+          <span class="hint">オーバーレイ背景の濃さ（小さいほど背景が透ける）</span>
+        </label>
+
         <label class="field" data-key="myName">
           <span class="label">自分の話者名</span>
           <input type="text" name="myName" autocomplete="off" spellcheck="false" />

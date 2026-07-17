@@ -123,6 +123,15 @@ export const FONT_SCALE_PRESETS = [
   { label: "大", value: 1.7 },
 ] as const;
 
+/**
+ * オーバーレイ背景パネルの不透明度（CSSアルファ）。UIは%整数（30〜90）で見せるが、
+ * ここ（0.3〜0.9の小数）が唯一の情報源。settings.htmlのrangeのmin/max（30/90）は
+ * このMIN/MAX*100に対応する派生値なので、範囲を変える場合は両方直すこと。
+ */
+export const PANEL_OPACITY_MIN = 0.3;
+export const PANEL_OPACITY_MAX = 0.9;
+export const PANEL_OPACITY_DEFAULT = 0.62;
+
 /** アプリ全体の設定。値は config.ts が env > 保存済みJSON > 既定値の優先順位で解決する */
 export interface Config {
   transcriptDir: string;
@@ -152,6 +161,11 @@ export interface Config {
   /** オーバーレイ文字サイズの倍率。FONT_SCALE_PRESETSのvalueのいずれかにスナップされる */
   fontScale: number;
   /**
+   * オーバーレイ背景パネルの不透明度。内部値はCSSアルファそのもの（PANEL_OPACITY_MIN〜MAXの小数）。
+   * UIは%整数（30〜90）で見せるが、変換はsettings.jsだけの関心事でmain/config/rendererは小数を扱う。
+   */
+  panelOpacity: number;
+  /**
    * 集中モード（true=ON）。ONのときWEB/CODEの提案件数を生成段階で最大2件に絞る。
    * メイン画面のオーバーレイボタン専用（EDITABLE_KEYSに含めない＝設定画面/env固定/永続化の対象外）。
    * アプリ起動時は常にfalseにリセットされる。
@@ -168,6 +182,7 @@ export interface Config {
 export const EDITABLE_KEYS = [
   "model",
   "fontScale",
+  "panelOpacity",
   "myName",
   "triggerCueCount",
   "recentCueLimit",

@@ -364,6 +364,11 @@ function applyFontScale(scale) {
   document.documentElement.style.fontSize = `${16 * scale}px`;
 }
 
+// --- 背景パネルの不透明度（panelOpacity） ---
+function applyPanelOpacity(v) {
+  document.documentElement.style.setProperty("--glass-alpha", String(v));
+}
+
 // --- 情報量モード（focusMode） ---
 // 集中モードのときもFROM THE WEB/CODEブロックは非表示にしない（生成段階で最大2件に絞られる。
 // 「集中モードのときは見れて候補2つまで」= 表示は残す方針）。表示件数はrender側では絞らないため、
@@ -380,6 +385,7 @@ function applyFocusMode(enabled) {
 // push通知: 設定ウィンドウでの変更をオーバーレイのボタン表示へ即反映する
 api.onFocusModeChanged((enabled) => applyFocusMode(enabled));
 api.onFontScaleChanged((scale) => applyFontScale(scale));
+api.onPanelOpacityChanged((v) => applyPanelOpacity(v));
 
 // projectDir/meetingContext の初期表示は同じConfigState（値＋envLocked）を使うため、
 // getConfig()のIPCは1回だけ呼び、両initへ渡す（起動時の往復を減らす）。
@@ -387,6 +393,7 @@ api.getConfig().then((state) => {
   initProjectDirInput(state);
   initContextBadge(state);
   applyFontScale(state.values.fontScale);
+  applyPanelOpacity(state.values.panelOpacity);
 });
 // 集中モードは非永続化（メイン画面ボタン専用）のため、起動時は常にOFFから開始する
 applyFocusMode(false);

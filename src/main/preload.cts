@@ -60,6 +60,9 @@ const api = {
   onFontScaleChanged(cb: (scale: number) => void): void {
     ipcRenderer.on("font-scale-changed", (_e, scale: number) => cb(scale));
   },
+  onPanelOpacityChanged(cb: (v: number) => void): void {
+    ipcRenderer.on("panel-opacity-changed", (_e, v: number) => cb(v));
+  },
   onFocusModeChanged(cb: (enabled: boolean) => void): void {
     ipcRenderer.on("focus-mode-changed", (_e, enabled: boolean) => cb(enabled));
   },

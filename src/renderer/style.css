@@ -2,7 +2,9 @@
    実行環境はElectron(Chromium最新)固定なのでフォールバック不要。 */
 
 :root {
-  --glass-bg: rgba(20, 22, 28, 0.62);
+  /* パネル背景の不透明度。JS(panelOpacity)が書き換える対象。既定はkuroko-purpose設計時の見た目と同じ0.62 */
+  --glass-alpha: 0.62;
+  --glass-bg: rgba(20, 22, 28, var(--glass-alpha));
   --glass-border: rgba(255, 255, 255, 0.1);
   --fg: rgba(236, 238, 242, 0.95);
   --fg-dim: rgba(236, 238, 242, 0.6);

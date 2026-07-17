@@ -18,6 +18,7 @@ let saveTimer = null;
 // getConfig()の往復完了より前に登録することで、初回ロード中のbroadcastを取りこぼさない
 // （renderer.js側の同期登録→getConfigで初期値適用、という順序と揃える）。
 api.onFontScaleChanged((scale) => applyPushedValue("fontScale", scale));
+api.onPanelOpacityChanged((v) => applyPushedValue("panelOpacity", v));
 
 init();
 
@@ -29,6 +30,11 @@ async function init() {
     e.preventDefault();
     await save();
   });
+
+  // range系フィールドはスライダー操作中にも%表示をその場で追従させる（保存前のプレビュー用途）
+  for (const input of form.querySelectorAll('input[type="range"]')) {
+    input.addEventListener("input", () => updateRangeOutput(input));
+  }
 }
 
 /**
@@ -51,6 +57,10 @@ function applyValueToInput(input, value) {
     input.checked = value === true;
   } else if (input.tagName === "SELECT") {
     selectMatchingOption(input, value);
+  } else if (input.type === "range") {
+    // 内部値(小数)→UI(%整数)。panelOpacity専用の変換（このファイルだけの関心事）
+    input.value = String(toPercent(Number(value)));
+    updateRangeOutput(input);
   } else {
     // 実効値を表示。値がundefinedの場合は空文字に。
     input.value = value == null ? "" : String(value);
@@ -66,6 +76,17 @@ function selectMatchingOption(select, value) {
     (opt) => Number(opt.value) === Number(value),
   );
   select.value = match ? match.value : "";
+}
+
+// panelOpacity専用: UI(%整数)と内部値(0.3〜0.9の小数)の変換。
+// この変換はsettings.js（設定ウィンドウ）だけの関心事で、main/config/rendererは一貫して小数を扱う。
+const toPercent = (v) => Math.round(v * 100);
+const fromPercent = (p) => p / 100;
+
+/** range inputの現在値表示(<output>)を更新する。フォーム構築時／スライダー操作中の両方から呼ぶ */
+function updateRangeOutput(input) {
+  const output = input.closest(".field")?.querySelector("output.range-value");
+  if (output) output.textContent = `${input.value}%`;
 }
 
 /** ConfigState を受け取りフォームへ反映する（初期化・保存後の上書き共通） */
@@ -109,6 +130,9 @@ async function save() {
       // fontScaleのプリセットは数値。mainのnormalizeEditable(snapToPreset)側でも数値変換するが、
       // 文字列のまま送るとGUI再表示のString(value)比較がズレないよう明示的にNumber化する
       payload[key] = Number(input.value);
+    } else if (input.type === "range") {
+      // UI(%整数)→内部値(小数)。panelOpacity専用の変換
+      payload[key] = fromPercent(Number(input.value));
     } else {
       payload[key] = input.value;
     }

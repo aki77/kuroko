@@ -318,6 +318,7 @@ ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
     transcriptDir: config.transcriptDir,
     contentProtection: config.contentProtection,
     fontScale: config.fontScale,
+    panelOpacity: config.panelOpacity,
   };
   applyEditable(next); // env固定キーは無視され、正規化された実効値がconfigに反映される
   writeSettings(getPersistableValues()); // env固定でないキーの実効値（クランプ後）だけを永続化する
@@ -332,6 +333,10 @@ ipcMain.handle("config:set", async (_e, next: Partial<EditableConfig>) => {
   // fontScaleが変わったときだけオーバーレイへ即反映する
   if (config.fontScale !== before.fontScale) {
     broadcast("font-scale-changed", config.fontScale);
+  }
+  // panelOpacityが変わったときだけオーバーレイへ即反映する
+  if (config.panelOpacity !== before.panelOpacity) {
+    broadcast("panel-opacity-changed", config.panelOpacity);
   }
   return { ok: true, state: getConfigState() };
 });

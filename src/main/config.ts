@@ -6,7 +6,13 @@ import type {
   EditableConfig,
   EditableKey,
 } from "../shared/types.js";
-import { EDITABLE_KEYS, FONT_SCALE_PRESETS } from "../shared/types.js";
+import {
+  EDITABLE_KEYS,
+  FONT_SCALE_PRESETS,
+  PANEL_OPACITY_DEFAULT,
+  PANEL_OPACITY_MAX,
+  PANEL_OPACITY_MIN,
+} from "../shared/types.js";
 
 /** GUI編集対象外（env専用）も含む全項目の既定値 */
 const DEFAULTS: Config = {
@@ -86,6 +92,9 @@ const DEFAULTS: Config = {
   /** オーバーレイ文字サイズ倍率。既定は「中」（現状比で一段大きい） */
   fontScale: 1.3,
 
+  /** オーバーレイ背景パネルの不透明度（CSSアルファ）。既定は現状の見た目と同じ0.62 */
+  panelOpacity: PANEL_OPACITY_DEFAULT,
+
   /** 情報量モード。既定はOFF（通常モード=ナビゲーター向けの現状ボリューム） */
   focusMode: false,
 
@@ -112,6 +121,7 @@ const RAW_ENV: Record<EditableKey, string | undefined> = {
   meetingContext: process.env.KUROKO_MEETING_CONTEXT,
   contentProtection: process.env.KUROKO_CONTENT_PROTECTION,
   fontScale: process.env.KUROKO_FONT_SCALE,
+  panelOpacity: process.env.KUROKO_PANEL_OPACITY,
 };
 
 /**
@@ -192,6 +202,21 @@ function normalizeOptionalName(raw: unknown): string | undefined {
 }
 
 /**
+ * min〜maxにクランプする数値正規化（関数自体は汎用。現状の唯一の利用者はpanelOpacity）。
+ * replaySpeed用の normalizePositiveNumber（下限のみ）と違い、上限も安全域として絞りたいキー向け。
+ */
+function normalizeRange(
+  raw: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/**
  * FONT_SCALE_PRESETSの中でnに最も近いvalueを持つ要素のindexを返す。
  * snapToPreset（自由値のスナップ）が使う、プリセットスナップの唯一の実装。
  */
@@ -261,6 +286,13 @@ function normalizeEditable(
       return normalizeBoolean(raw, DEFAULTS.contentProtection);
     case "fontScale":
       return snapToPreset(raw, DEFAULTS.fontScale);
+    case "panelOpacity":
+      return normalizeRange(
+        raw,
+        DEFAULTS.panelOpacity,
+        PANEL_OPACITY_MIN,
+        PANEL_OPACITY_MAX,
+      );
   }
 }
 
