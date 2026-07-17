@@ -81,7 +81,8 @@ export type Status =
   | { kind: "waiting"; pendingCues: number; needed: number }
   | { kind: "querying" }
   | { kind: "error"; message: string }
-  | { kind: "no-meeting" };
+  | { kind: "no-meeting" }
+  | { kind: "no-cues" }; // 会議検出直後、最初の発話cueがまだ1件も来ていない状態
 
 /**
  * デバッグウィンドウ専用のログイベント。オーバーレイの Status/suggestion 経路とは独立で、
@@ -154,6 +155,11 @@ export interface Config {
    * アプリ起動時は常にfalseにリセットされる。
    */
   focusMode: boolean;
+  /**
+   * チャット入力（オーバーレイのチャット欄）を直近何件まで保持するか。
+   * EDITABLE_KEYSに含めない固定値（設定画面/env/永続化の対象外）。
+   */
+  chatInputLimit: number;
 }
 
 /** GUIで編集可能なキー（この順序でフォームに並べる） */

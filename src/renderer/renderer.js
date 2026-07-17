@@ -36,6 +36,7 @@ const el = {
   contextOpenBtn: document.getElementById("contextOpenBtn"),
   contextBadge: document.getElementById("contextBadge"),
   contextLock: document.getElementById("contextLock"),
+  chatInput: document.getElementById("chatInput"),
 };
 
 // 同一会議中のみ保持する提案履歴
@@ -122,11 +123,23 @@ document.addEventListener("keydown", (e) => {
 
 api.onStatus((s) => {
   el.statusDot.className = "dot";
+  // no-meeting/no-cues中はチャット入力を無効化する。送信してもrun()が
+  // （currentFile未設定 or cue0件で）即returnし、フィードバックのないまま
+  // no-meeting中の入力はmeeting切替時にchatInputsごと消えてしまうため
+  const chatInputDisabled = s.kind === "no-meeting" || s.kind === "no-cues";
+  el.chatInput.disabled = chatInputDisabled;
+  // disabled化と同時に未送信テキストも捨てる。そのままだと前の会議宛ての
+  // テキストが次の会議のdisabled解除後まで残り、誤送信されうるため。
+  if (chatInputDisabled) el.chatInput.value = "";
   switch (s.kind) {
     case "no-meeting":
       el.statusDot.classList.add("idle");
       el.statusLine.textContent = "進行中の会議を待機中…";
       resetHistory();
+      break;
+    case "no-cues":
+      el.statusDot.classList.add("idle");
+      el.statusLine.textContent = "最初の発言を待機中…";
       break;
     case "idle":
       el.statusDot.classList.add("idle");
@@ -285,6 +298,23 @@ function commitProjectDir() {
   api.setConfig({ projectDir: value });
   if (value) addProjectDirHistory(value);
 }
+
+// チャット入力（発話cuesと並ぶもう一つの入力口）。
+// 専用の回答描画は持たない。回答は既存のonSuggestion/onSuggestionPart経路で
+// 提案パネル（topic/questions/web/code）に反映されるため、送信ハンドラのみ持つ。
+el.chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    if (e.isComposing || e.keyCode === 229) return; // IME変換確定のEnterは送信しない
+    e.preventDefault();
+    const text = el.chatInput.value.trim();
+    if (!text) return;
+    api.submitChat(text);
+    el.chatInput.value = "";
+    // 送信フィードバック: statusLineは即トリガーで"querying"に変わるので追加UI不要
+  } else if (e.key === "Escape") {
+    el.chatInput.blur();
+  }
+});
 
 function initProjectDirInput(state) {
   projectDirHistoryCache = loadProjectDirHistory();

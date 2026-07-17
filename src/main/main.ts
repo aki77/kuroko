@@ -343,6 +343,12 @@ ipcMain.on("focus-mode:set", (_e, enabled: boolean) => {
   broadcast("focus-mode-changed", config.focusMode);
 });
 
+// オーバーレイのチャット欄からの送信専用（発話cuesと並ぶもう一つの入力口）。
+// 即トリガーで提案は既存の "suggestion"/"status" 経路で返るため、invoke で回答を待つ必要はない。
+ipcMain.on("chat:submit", (_e, text: unknown) => {
+  if (typeof text === "string") orchestrator?.submitChatInput(text);
+});
+
 // 会議コンテキスト（アジェンダ・資料）確定時の要約IPC。
 // claude -p を挟む非同期処理（数十秒かかりうる）を config:set とは別経路にし、
 // 他の設定変更（即時同期）をブロックしないようにする。

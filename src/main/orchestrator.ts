@@ -26,6 +26,7 @@ function describeStatus(s: Status): string {
     case "idle":
     case "querying":
     case "no-meeting":
+    case "no-cues":
       return s.kind;
     default: {
       const exhaustive: never = s;
@@ -56,6 +57,8 @@ export class Orchestrator extends EventEmitter {
   private watcher = new TranscriptWatcher();
   private currentFile?: string;
   private latestCues: Cue[] = [];
+  /** チャット入力（オーバーレイ下部の依頼・指摘欄）の直近履歴。会議ごとのリングバッファ */
+  private chatInputs: string[] = [];
   private previous: Suggestion | null = null;
   private cueCountAtLastRun = 0;
   private generating = false;
@@ -77,12 +80,8 @@ export class Orchestrator extends EventEmitter {
       // 新しいミーティングに切り替わったら状態をリセット。
       // 生成中のrunがあっても run() 内のローカル file 変数と this.currentFile が
       // 不一致になるため、完了時にその結果は破棄される。
-      this.currentFile = file;
-      this.previous = null;
-      this.cueCountAtLastRun = 0;
-      this.latestCues = [];
-      this.pendingTrigger = false;
-      this.setStatus({ kind: "idle" });
+      this.resetMeetingState(file);
+      this.setStatus({ kind: "no-cues" });
     });
 
     this.watcher.on("cues", (file, cues) => {
@@ -107,6 +106,20 @@ export class Orchestrator extends EventEmitter {
   }
 
   /**
+   * 会議状態（発話/チャット履歴/生成結果まわり）を初期化する。
+   * "meeting" ハンドラ（新しい会議への切替）と restartWatcher()（watcher作り直し）の
+   * 両方から呼ばれる共通処理。フィールドを増やす際はここ1箇所を直せばよい。
+   */
+  private resetMeetingState(file: string | undefined): void {
+    this.currentFile = file;
+    this.previous = null;
+    this.cueCountAtLastRun = 0;
+    this.latestCues = [];
+    this.chatInputs = [];
+    this.pendingTrigger = false;
+  }
+
+  /**
    * transcriptDir 変更に伴い watcher を作り直す。
    * 旧watcherを止め、会議状態を初期化してから新しい TranscriptWatcher を張り直す。
    * cumulativeCostUsd は会議跨ぎで累積する参考値なのでリセットしない（既存踏襲）。
@@ -115,16 +128,27 @@ export class Orchestrator extends EventEmitter {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     await this.watcher.stop();
 
-    // "meeting" ハンドラ相当の初期化（新watcherがまだ何も検知していない状態に戻す）
-    this.currentFile = undefined;
-    this.previous = null;
-    this.cueCountAtLastRun = 0;
-    this.latestCues = [];
-    this.pendingTrigger = false;
+    // 新watcherがまだ何も検知していない状態に戻す（"meeting" ハンドラ相当の初期化）
+    this.resetMeetingState(undefined);
 
     this.watcher = new TranscriptWatcher();
     this.bindWatcher();
     await this.watcher.start();
+  }
+
+  /**
+   * チャット入力（オーバーレイ下部の依頼・指摘欄）を直近履歴に積み、即座に提案を1回生成する。
+   * 発話cuesと並ぶ「もう一つの入力口」として、以降の提案生成（自動含む）にも
+   * chatInputsが尽きる（会議切替でクリア）まで毎回注入され続ける。
+   */
+  submitChatInput(text: string): void {
+    const t = text.trim();
+    if (!t) return;
+    this.chatInputs.push(t);
+    // slice(-N)は配列長がN以下でも安全（元と同じ内容を返す）ため上限チェックのifは不要
+    this.chatInputs = this.chatInputs.slice(-config.chatInputLimit);
+    debugLog.push("orchestrator", "info", "chat-input", `参加者入力: ${t}`);
+    this.triggerNow(); // 既存の手動トリガー経路を再利用（生成中なら pendingTrigger で予約される）
   }
 
   /** 手動トリガー（キー/ボタンから即生成） */
@@ -146,6 +170,13 @@ export class Orchestrator extends EventEmitter {
   }
 
   private scheduleMaybeRun(): void {
+    // 発話がまだ1件も届いていなければ no-cues のまま（waitingへ落とさない）。
+    // watcher が新規会議で発火する初回の空cuesイベントで no-cues が waiting に
+    // 上書きされ、チャット入力欄が誤って有効化されるのを防ぐ。
+    if (this.latestCues.length === 0) {
+      this.setStatus({ kind: "no-cues" });
+      return;
+    }
     const pending = this.latestCues.length - this.cueCountAtLastRun;
     if (pending < config.triggerCueCount) {
       this.setStatus({
@@ -179,6 +210,7 @@ export class Orchestrator extends EventEmitter {
       const { suggestion, durationMs, costUsd } = await generateSuggestion(
         this.latestCues,
         this.previous,
+        this.chatInputs,
         (part) => {
           if (this.currentFile !== file) return; // 会議切替済みの古い部分は破棄
           this.emit("suggestion-part", { part, meetingFile: basename(file) });

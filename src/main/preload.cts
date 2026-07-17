@@ -67,6 +67,10 @@ const api = {
   setFocusMode(enabled: boolean): void {
     ipcRenderer.send("focus-mode:set", enabled);
   },
+  // オーバーレイのチャット欄専用。発話cuesと並ぶもう一つの入力口として即トリガーする
+  submitChat(text: string): void {
+    ipcRenderer.send("chat:submit", text);
+  },
   // --- デバッグウィンドウ専用 ---
   onDebugSnapshot(cb: (events: DebugEvent[]) => void): void {
     ipcRenderer.on("debug:snapshot", (_e, evs: DebugEvent[]) => cb(evs));

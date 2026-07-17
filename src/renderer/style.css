@@ -267,6 +267,27 @@ body {
   font-size: 11px;
 }
 
+/* チャット入力欄（発話cuesと並ぶもう一つの入力口）。projectdir-rowと同じ「常設・no-drag」パターン */
+.chat-row {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px 8px;
+}
+
+.chat-icon {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.chat-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 本文（スクロール領域）。下端をマスクでフェードしてスクロール可能を示す */
 .content {
   flex: 1;

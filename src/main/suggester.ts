@@ -140,6 +140,7 @@ ${questionsGuidance}
 3. needsCode / codeQuery: 今の議論が自プロジェクトの実装の詳細（仕様・挙動・データ構造）に関わっており、実装を確認すると議論が正確になる場合だけ needsCode を true にし、codeQuery に確認すべき事柄を簡潔に書く。一般的な話・実装に無関係な話なら needsCode は false、codeQuery は空文字。
 
 事前コンテキスト（アジェンダ・資料）が与えられている場合は、topic/questions の判断にも活用すること。
+参加者からの依頼・指摘が与えられている場合は最優先で反映し、指摘は次の提案に確実に織り込むこと。実装の確認を伴う依頼（例:「〇〇の実装/仕様を確認して」）なら needsCode を true にすること。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 }
@@ -159,6 +160,7 @@ function buildWebSystemPrompt(focusMode: boolean): string {
 進行中の会議の文字起こしを読み、参加者の議論を深める背景知識をWeb検索で調べて返します。
 
 web: 会話に登場した専門用語・技術・製品・固有名詞のうち、背景知識があると議論が深まるものをWeb検索で調べて簡潔に補足する。一般常識レベルのものは含めない。${focusModeGuidance(focusMode)}各項目に参照元URLを可能な限り添える。
+参加者からの依頼（例:「〇〇について調べて」）が与えられている場合は、それに沿ってWeb検索すること。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 }
@@ -168,6 +170,7 @@ function buildCodeSystemPrompt(focusMode: boolean): string {
 Read/Grep/Globで自プロジェクトの実装を調べ、会議で話している仕様・挙動を実装の事実で裏付けます。
 
 code: 推測で埋めず、実際に読んだ内容だけを書く。各項目に参照位置(ファイル:行)を可能なら添える。${focusModeGuidance(focusMode)}
+参加者からの依頼・指摘が与えられている場合は、それに沿って実装を調べること。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
 }
@@ -277,10 +280,15 @@ const EMPTY_RESULT: ClaudeRunResult = {
  *   B（遅い・WebSearchあり）: web(WebNote[]) のみ。Aと並行実行
  *   C（遅い・Read/Grep/Globあり）: code(CodeNote[]) のみ。Aの判定(needsCode)に依存するため逐次実行
  * B/Cが失敗・未実行でもAだけで提案を返す（会議中に全滅しないため）。
+ *
+ * chatInputs は発話cuesと並ぶ「もう一つの入力口」（オーバーレイのチャット欄から参加者が送った
+ * 依頼・指摘の直近履歴）。専用の回答経路は持たず、A/B/Cすべてのプロンプトに注入して既存の
+ * 提案（topic/discussion/questions/web/code）に反映させる。
  */
 export async function generateSuggestion(
   cues: Cue[],
   previous: Suggestion | null,
+  chatInputs: string[],
   onPartial?: (part: SuggestionPartial) => void,
   onDebug?: OnDebug,
 ): Promise<SuggestResult> {
@@ -314,6 +322,13 @@ export async function generateSuggestion(
     ? `【この会議の事前コンテキスト（アジェンダ・資料）】\n${config.meetingContext}\n\n`
     : "";
 
+  // 参加者がオーバーレイのチャット欄から送った依頼・指摘（発話cuesと並ぶもう一つの入力口）。
+  // 直近K件のリングバッファ（orchestrator側で管理）をA/B/Cすべてのプロンプトに注入する。
+  // meetingContextSection と同様、文字起こしより前（プロンプト冒頭寄り）に置く。
+  const chatInputSection = chatInputs.length
+    ? `【参加者からの依頼・指摘（最優先で反映すること）】\n${chatInputs.map((c) => `- ${c}`).join("\n")}\n\n`
+    : "";
+
   // 集中モードは生成冒頭で1回だけキャプチャする。config.focusMode は setFocusMode() により
   // IPC 経由で生成中にも非同期に書き換わりうるミュータブルなシングルトンのため、
   // B/Cの読み取りタイミングを分けると同一提案内でモードが食い違う（B=切替前・C=切替後）。
@@ -326,7 +341,7 @@ export async function generateSuggestion(
   const baseTask = { model: config.model } as const;
   const summaryTask: ClaudeTask = {
     ...baseTask,
-    prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("提案", prevSummary)}`,
+    prompt: `${meetingContextSection}${chatInputSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("提案", prevSummary)}`,
     systemPrompt: buildSummarySystemPrompt(config.myName),
     schema: SUMMARY_SCHEMA,
     allowedTools: [],
@@ -335,7 +350,7 @@ export async function generateSuggestion(
   };
   const webTask: ClaudeTask = {
     ...baseTask,
-    prompt: `以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("補足", prevWeb)}`,
+    prompt: `${chatInputSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}${prevSection("補足", prevWeb)}`,
     systemPrompt: buildWebSystemPrompt(focusMode),
     schema: buildWebSchema(focusMode),
     allowedTools: ["WebSearch"],
@@ -377,7 +392,7 @@ export async function generateSuggestion(
     if (needsCode && config.projectDir) {
       const codeTask: ClaudeTask = {
         ...baseTask,
-        prompt: `${meetingContextSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
+        prompt: `${meetingContextSection}${chatInputSection}以下は進行中の会議の直近の文字起こしです。\n\n${transcript}\n\n【実装で確認すべきこと】\n${codeQuery}${prevSection("実装確認", previous && { code: previous.code })}`,
         systemPrompt: buildCodeSystemPrompt(focusMode),
         schema: buildCodeSchema(focusMode),
         allowedTools: ["Read", "Grep", "Glob"],
