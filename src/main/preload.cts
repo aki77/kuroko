@@ -43,6 +43,9 @@ const api = {
   openContext(): void {
     ipcRenderer.send("open-context");
   },
+  openDebug(): void {
+    ipcRenderer.send("open-debug");
+  },
   summarizeContext(raw: string): Promise<{
     ok: boolean;
     summarized: boolean;

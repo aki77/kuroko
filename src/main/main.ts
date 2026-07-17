@@ -198,8 +198,9 @@ async function wireOrchestrator(): Promise<void> {
 
 /**
  * アプリメニューを構築する。Electron既定メニュー（Manually creating the default menu）
- * 同等の構成を土台にし、「表示」メニューの末尾にのみ
- * 「デバッグウィンドウを開く」項目（accelerator無し）を追加する。
+ * 同等の構成をそのまま使う（カスタム項目は持たない）。
+ * デバッグウィンドウはオーバーレイ内の🐞ボタン（open-debug IPC）から開く
+ * （オーバーレイがメニューバーをアクティブ化できずメニュー経由の導線が使えないため）。
  */
 function buildMenu(): Menu {
   const isMac = process.platform === "darwin";
@@ -246,11 +247,6 @@ function buildMenu(): Menu {
         { role: "zoomOut" as const },
         { type: "separator" as const },
         { role: "togglefullscreen" as const },
-        { type: "separator" as const },
-        {
-          label: "デバッグウィンドウを開く",
-          click: () => openDebugWindow(),
-        },
       ],
     },
     {
@@ -311,6 +307,9 @@ ipcMain.on("open-settings", () => openSettingsWindow());
 
 // オーバーレイの「コンテキスト」ボタンからコンテキスト専用ウィンドウを開く
 ipcMain.on("open-context", () => openContextWindow());
+
+// オーバーレイのデバッグボタンからデバッグウィンドウを開く
+ipcMain.on("open-debug", () => openDebugWindow());
 
 // 設定ウィンドウ ↔ メインの往復（invoke/handle）
 ipcMain.handle("config:get", () => getConfigState());

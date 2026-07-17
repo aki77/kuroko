@@ -23,6 +23,7 @@ const el = {
   footerStatus: document.getElementById("footerStatus"),
   refreshBtn: document.getElementById("refreshBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
+  debugBtn: document.getElementById("debugBtn"),
   focusModeBtn: document.getElementById("focusModeBtn"),
   historyPrevBtn: document.getElementById("historyPrevBtn"),
   historyNextBtn: document.getElementById("historyNextBtn"),
@@ -85,6 +86,7 @@ function resetSummaryCollapsed() {
 
 el.refreshBtn.addEventListener("click", () => api.triggerNow());
 el.settingsBtn.addEventListener("click", () => api.openSettings());
+el.debugBtn.addEventListener("click", () => api.openDebug());
 el.focusModeBtn.addEventListener("click", () => {
   // 送信値はローカルの focusMode を即反転して予測する（連打時に古い値を送るのを防ぐ）。
   // 表示同期は従来どおり onFocusModeChanged の push 通知（focus-mode-changed）に一本化する。
