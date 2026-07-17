@@ -20,6 +20,7 @@ import {
   resolveGitRepo,
 } from "./git-url.js";
 import { findUnreachableUrls } from "./url-check.js";
+import { normalizeWebDetails } from "./web-details.js";
 
 /** claude -p に渡す構造化出力スキーマ（A: 要約+questions+needsCode判定。WebSearchなしで速い） */
 const SUMMARY_SCHEMA = {
@@ -66,6 +67,12 @@ function buildWebSchema(focusMode: boolean) {
           properties: {
             title: { type: "string" },
             detail: { type: "string" },
+            details: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "detail をさらに補足する背景・根拠・具体例などの箇条書き（3〜5項目程度、各1文）。ホバーで詳細表示するための情報。",
+            },
             url: {
               type: "string",
               description:
@@ -160,6 +167,7 @@ function buildWebSystemPrompt(focusMode: boolean): string {
 進行中の会議の文字起こしを読み、参加者の議論を深める背景知識をWeb検索で調べて返します。
 
 web: 会話に登場した専門用語・技術・製品・固有名詞のうち、背景知識があると議論が深まるものをWeb検索で調べて簡潔に補足する。一般常識レベルのものは含めない。${focusModeGuidance(focusMode)}各項目に参照元URLを可能な限り添える。
+各項目は detail に1〜2文の要約を書き、加えて details に背景・根拠・具体例などを箇条書きで3〜5項目（各1文、Web検索で分かった範囲で）添える。detail は簡潔さ優先、details はやや詳しくてよい。
 参加者からの依頼（例:「〇〇について調べて」）が与えられている場合は、それに沿ってWeb検索すること。
 
 日本語で、簡潔に。会議の邪魔にならないよう要点だけ。`;
@@ -493,11 +501,15 @@ function toWeb(raw: unknown): WebNote[] {
         .filter(
           (w): w is Record<string, unknown> => !!w && typeof w === "object",
         )
-        .map((w) => ({
-          title: typeof w.title === "string" ? w.title : "",
-          detail: typeof w.detail === "string" ? w.detail : "",
-          ...(isHttpsUrl(w.url) ? { url: w.url } : {}),
-        }))
+        .map((w) => {
+          const details = normalizeWebDetails(w.details);
+          return {
+            title: typeof w.title === "string" ? w.title : "",
+            detail: typeof w.detail === "string" ? w.detail : "",
+            ...(details ? { details } : {}),
+            ...(isHttpsUrl(w.url) ? { url: w.url } : {}),
+          };
+        })
         .filter((w) => w.title || w.detail)
     : [];
 }

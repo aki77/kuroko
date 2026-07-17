@@ -27,6 +27,8 @@ export interface WebNote {
   title: string;
   /** 補足の中身（1〜2文） */
   detail: string;
+  /** detailを補足する詳しい箇条書き（ホバーで表示。無い場合あり） */
+  details?: string[];
   /** 出典URL（Web検索の参照元。無い場合あり） */
   url?: string;
 }

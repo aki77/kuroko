@@ -30,6 +30,7 @@ const el = {
   historyPosition: document.getElementById("historyPosition"),
   historyUnseen: document.getElementById("historyUnseen"),
   urlTooltip: document.getElementById("urlTooltip"),
+  webPopover: document.getElementById("webPopover"),
   projectDirInput: document.getElementById("projectDirInput"),
   projectDirSuggest: document.getElementById("projectDirSuggest"),
   projectDirLock: document.getElementById("projectDirLock"),
@@ -466,17 +467,32 @@ function renderQuestions(s) {
 
 function renderWeb(s) {
   hideTooltip();
+  hideWebPopover();
   el.web.replaceChildren();
   if (Array.isArray(s.web) && s.web.length > 0) {
     for (const w of s.web) {
       const item = document.createElement("div");
       item.className = "web-item";
-      const title = createLinkableElement("web-title", "web-link", w.url);
+      const details = Array.isArray(w.details) ? w.details : [];
+      // 詳細ポップオーバーとURLツールチップが同時に出ると煩いため、
+      // details保持item内ではtitleのURLツールチップ(data-tooltip)を最初から付けず、
+      // item全体のホバーで詳細ポップオーバーのみを出す（クリックでの外部起動は維持）。
+      const title = createLinkableElement("web-title", "web-link", w.url, {
+        showTooltip: details.length === 0,
+      });
       title.textContent = w.title;
       const detail = document.createElement("div");
       detail.className = "web-detail";
       detail.textContent = w.detail;
       item.append(title, detail);
+
+      if (details.length > 0) {
+        item.classList.add("web-item--has-details");
+        item.addEventListener("mouseenter", (e) => showWebPopover(details, e));
+        item.addEventListener("mousemove", (e) => positionWebPopover(e));
+        item.addEventListener("mouseleave", hideWebPopover);
+      }
+
       el.web.appendChild(item);
     }
     el.webBlock.hidden = false;
@@ -539,6 +555,19 @@ function truncate(str, n) {
   return str.length > n ? `${str.slice(0, n)}…` : str;
 }
 
+/**
+ * マウス位置とホバー要素のサイズから、右下オフセット・画面端反転つきの表示座標を計算する。
+ * ホバー表示系（#urlTooltip / #webPopover）で共通の位置決めロジック。
+ */
+function computeHoverPosition(e, rect) {
+  const pad = 12;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  return { x: Math.max(4, x), y: Math.max(4, y) };
+}
+
 let tooltipRect = null; // 表示中はサイズ不変なのでmousemove毎の強制リフローを避けるためキャッシュ
 
 function showTooltip(text, e) {
@@ -549,19 +578,42 @@ function showTooltip(text, e) {
 }
 
 function positionTooltip(e) {
-  // マウス右下に少しオフセット。右端・下端でウィンドウ外にはみ出す場合は反転
-  const pad = 12;
-  const rect = tooltipRect;
-  let x = e.clientX + pad;
-  let y = e.clientY + pad;
-  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
-  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
-  el.urlTooltip.style.left = `${Math.max(4, x)}px`;
-  el.urlTooltip.style.top = `${Math.max(4, y)}px`;
+  const { x, y } = computeHoverPosition(e, tooltipRect);
+  el.urlTooltip.style.left = `${x}px`;
+  el.urlTooltip.style.top = `${y}px`;
 }
 
 function hideTooltip() {
   el.urlTooltip.hidden = true;
+}
+
+let webPopoverRect = null; // 表示中はサイズ不変なのでmousemove毎の強制リフローを避けるためキャッシュ
+
+/**
+ * FROM THE WEB の details（箇条書き詳細）をホバーポップオーバーで表示する。
+ * URLツールチップ(#urlTooltip)とは別系統・専用要素（renderWeb参照。同時表示は抑制済み）。
+ */
+function showWebPopover(details, e) {
+  const ul = document.createElement("ul");
+  for (const d of details) {
+    const li = document.createElement("li");
+    li.textContent = d;
+    ul.appendChild(li);
+  }
+  el.webPopover.replaceChildren(ul);
+  el.webPopover.hidden = false;
+  webPopoverRect = el.webPopover.getBoundingClientRect();
+  positionWebPopover(e);
+}
+
+function positionWebPopover(e) {
+  const { x, y } = computeHoverPosition(e, webPopoverRect);
+  el.webPopover.style.left = `${x}px`;
+  el.webPopover.style.top = `${y}px`;
+}
+
+function hideWebPopover() {
+  el.webPopover.hidden = true;
 }
 
 /**
@@ -569,8 +621,15 @@ function hideTooltip() {
  * FROM THE WEB / FROM THE CODE の両方でリンク化ロジックを共通化するためのヘルパー。
  * ツールチップ表示自体は data-tooltip 経由でデリゲーション（後述）に委ね、
  * ここでは click（外部ブラウザで開く）ハンドラのみを個別に持つ。
+ * showTooltip=false を渡すと data-tooltip を付けない（例: FROM THE WEB の details
+ * ポップオーバーと同時表示させたくない場合。クリックでの外部起動自体は維持される）。
  */
-function createLinkableElement(baseClassName, linkClassName, url) {
+function createLinkableElement(
+  baseClassName,
+  linkClassName,
+  url,
+  { showTooltip = true } = {},
+) {
   if (!url) {
     const div = document.createElement("div");
     div.className = baseClassName;
@@ -579,7 +638,7 @@ function createLinkableElement(baseClassName, linkClassName, url) {
   const a = document.createElement("a");
   a.className = `${baseClassName} ${linkClassName}`;
   a.href = "#";
-  a.dataset.tooltip = url;
+  if (showTooltip) a.dataset.tooltip = url;
   a.addEventListener("click", (e) => {
     e.preventDefault();
     api.openExternal(url);
