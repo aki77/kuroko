@@ -197,8 +197,16 @@ api.onSuggestion((u) => {
   }
   updateHistoryNav();
 
-  // 一覧オーバーレイを開いたまま新ラウンドが確定した場合はライブ追従で再描画する
-  if (!el.historyOverlay.hidden) renderHistoryOverlay();
+  // 一覧オーバーレイを開いたまま新ラウンドが確定した場合はライブ追従で再描画する。
+  // 再描画前に「ほぼ最下部にいたか」を判定し、いた場合のみ末尾へ追従する
+  // （過去を遡って閲覧中に勝手に最下部へ飛ばさないため）。
+  if (!el.historyOverlay.hidden) {
+    const list = el.historyOverlayList;
+    const nearBottom =
+      list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    renderHistoryOverlay();
+    if (nearBottom) list.scrollTop = list.scrollHeight;
+  }
 });
 
 api.onSuggestionPart((u) => {
