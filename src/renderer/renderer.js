@@ -29,6 +29,10 @@ const el = {
   historyNextBtn: document.getElementById("historyNextBtn"),
   historyPosition: document.getElementById("historyPosition"),
   historyUnseen: document.getElementById("historyUnseen"),
+  historyListBtn: document.getElementById("historyListBtn"),
+  historyOverlay: document.getElementById("historyOverlay"),
+  historyOverlayClose: document.getElementById("historyOverlayClose"),
+  historyOverlayList: document.getElementById("historyOverlayList"),
   urlTooltip: document.getElementById("urlTooltip"),
   webPopover: document.getElementById("webPopover"),
   projectDirInput: document.getElementById("projectDirInput"),
@@ -102,6 +106,8 @@ el.historyNextBtn.addEventListener("click", () => goToHistory(cursor + 1));
 el.historyUnseen.addEventListener("click", () =>
   goToHistory(history.length - 1),
 );
+el.historyListBtn.addEventListener("click", () => toggleHistoryOverlay());
+el.historyOverlayClose.addEventListener("click", () => closeHistoryOverlay());
 
 el.topicHeader.addEventListener("click", () => {
   summaryCollapsed = !summaryCollapsed;
@@ -112,6 +118,10 @@ el.topicHeader.addEventListener("click", () => {
 // ⌘系ショートカットはウィンドウローカル（オーバーレイにフォーカスがある時だけ効く）にまとめる。
 // 現状は履歴ナビ（⌘⇧←/→）専用。
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el.historyOverlay.hidden) {
+    closeHistoryOverlay();
+    return;
+  }
   if (!e.metaKey || !e.shiftKey) return;
   if (e.key === "ArrowLeft") {
     e.preventDefault();
@@ -119,6 +129,9 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "ArrowRight") {
     e.preventDefault();
     goToHistory(cursor + 1);
+  } else if (e.key.toLowerCase() === "l") {
+    e.preventDefault();
+    toggleHistoryOverlay();
   }
 });
 
@@ -183,6 +196,9 @@ api.onSuggestion((u) => {
     hasUnseenLatest = true;
   }
   updateHistoryNav();
+
+  // 一覧オーバーレイを開いたまま新ラウンドが確定した場合はライブ追従で再描画する
+  if (!el.historyOverlay.hidden) renderHistoryOverlay();
 });
 
 api.onSuggestionPart((u) => {
@@ -405,6 +421,7 @@ function resetHistory() {
   liveDraft = null;
   resetSummaryCollapsed(); // DOM反映まで含めて行う（resetSummaryCollapsed参照）
   updateHistoryNav();
+  closeHistoryOverlay(); // 古い会議の一覧を残さない
 }
 
 function goToHistory(index) {
@@ -446,6 +463,67 @@ function updateHistoryNav() {
   el.historyPrevBtn.disabled = total <= 1 || cursor <= 0;
   el.historyNextBtn.disabled = total <= 1 || cursor >= total - 1;
   el.historyUnseen.hidden = !hasUnseenLatest;
+}
+
+// --- 要約の流れ一覧オーバーレイ（振り返り用。history[]を時系列に縦一覧表示） ---
+
+function openHistoryOverlay() {
+  renderHistoryOverlay();
+  el.historyOverlay.hidden = false;
+  // 開いた直後は最新（一番下）へ追いつくのがゴールのため一番下までスクロールする
+  el.historyOverlayList.scrollTop = el.historyOverlayList.scrollHeight;
+}
+
+function closeHistoryOverlay() {
+  el.historyOverlay.hidden = true;
+}
+
+function toggleHistoryOverlay() {
+  if (el.historyOverlay.hidden) {
+    openHistoryOverlay();
+  } else {
+    closeHistoryOverlay();
+  }
+}
+
+function renderHistoryOverlay() {
+  el.historyOverlayList.replaceChildren();
+
+  if (history.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "history-overlay-empty";
+    empty.textContent = "会議が始まると、ここに話題の流れが表示されます。";
+    el.historyOverlayList.appendChild(empty);
+    return;
+  }
+
+  history.forEach((u, index) => {
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const time = document.createElement("div");
+    time.className = "history-row-time";
+    time.textContent = formatTime(u.updatedAt);
+
+    const topic = document.createElement("div");
+    topic.className = "history-row-topic";
+    topic.textContent = u.suggestion.topic || "";
+
+    const discussion = document.createElement("div");
+    discussion.className = "history-row-discussion";
+    discussion.textContent = u.suggestion.discussion || "";
+
+    row.append(time, topic, discussion);
+    row.addEventListener("click", () => {
+      goToHistory(index);
+      closeHistoryOverlay();
+    });
+    el.historyOverlayList.appendChild(row);
+  });
+
+  // 最新（末尾）行だけ強調する。ループ内で毎回index比較するより、
+  // 構築済みDOMの末尾要素に後から1回だけクラスを付ける方が単純
+  el.historyOverlayList.lastElementChild.classList.add("history-row--latest");
 }
 
 function renderTopic(s) {
@@ -538,12 +616,17 @@ function renderCode(s) {
   }
 }
 
-function renderFooter(u) {
-  const time = new Date(u.updatedAt).toLocaleTimeString("ja-JP", {
+// フッタ・要約の流れ一覧の両方で使う時刻表示フォーマット（時:分:秒）
+function formatTime(dateLike) {
+  return new Date(dateLike).toLocaleTimeString("ja-JP", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function renderFooter(u) {
+  const time = formatTime(u.updatedAt);
   const secs = (u.durationMs / 1000).toFixed(1);
   const cost = u.cumulativeCostUsd.toFixed(4);
   el.footerStatus.textContent = `Updated ${time} · ${secs}s · ~$${cost}`;

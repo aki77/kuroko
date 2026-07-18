@@ -22,79 +22,92 @@
         </div>
       </header>
 
-      <div class="status-line" id="statusLine">待機中…</div>
+      <!-- タイトルバー以外の領域。.history-overlay の position:absolute の配置基準
+           （inset:0 でこのラッパー＝タイトルバー下端から下を隙間なく覆う）。 -->
+      <div class="panel-body">
+        <div class="status-line" id="statusLine">待機中…</div>
 
-      <div class="projectdir-row" id="projectDirRow">
-        <span class="projectdir-icon" aria-hidden="true">📁</span>
-        <input
-          id="projectDirInput"
-          class="field-input"
-          type="text"
-          placeholder="参照プロジェクトのパス（任意）"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <ul class="projectdir-suggest" id="projectDirSuggest" hidden></ul>
-        <span class="projectdir-lock" id="projectDirLock" hidden data-tooltip="KUROKO_PROJECT_DIRで固定中">🔒</span>
-      </div>
-
-      <div class="context-row" id="contextRow">
-        <button class="context-open-btn" id="contextOpenBtn" type="button" data-tooltip="コンテキストを編集">
-          <span aria-hidden="true">📝</span>
-          <span>コンテキスト</span>
-          <span class="context-badge" id="contextBadge" hidden>登録済み</span>
-          <span class="context-lock" id="contextLock" hidden data-tooltip="KUROKO_MEETING_CONTEXTで固定中">🔒</span>
-        </button>
-      </div>
-
-      <main class="content" id="content">
-        <div class="empty" id="empty">
-          会議が始まると、ここに話題の要約・次に話すべきこと・背景知識が表示されます。
+        <div class="projectdir-row" id="projectDirRow">
+          <span class="projectdir-icon" aria-hidden="true">📁</span>
+          <input
+            id="projectDirInput"
+            class="field-input"
+            type="text"
+            placeholder="参照プロジェクトのパス（任意）"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <ul class="projectdir-suggest" id="projectDirSuggest" hidden></ul>
+          <span class="projectdir-lock" id="projectDirLock" hidden data-tooltip="KUROKO_PROJECT_DIRで固定中">🔒</span>
         </div>
 
-        <section class="block topic-block" id="topicBlock" hidden>
-          <h1>
-            <button type="button" id="topicHeader" aria-expanded="true">
-              <span class="collapse-indicator" id="summaryCaret" aria-hidden="true">▼</span>
-              <span id="topic">話題</span>
-            </button>
-          </h1>
-          <p id="discussion"></p>
-        </section>
+        <div class="context-row" id="contextRow">
+          <button class="context-open-btn" id="contextOpenBtn" type="button" data-tooltip="コンテキストを編集">
+            <span aria-hidden="true">📝</span>
+            <span>コンテキスト</span>
+            <span class="context-badge" id="contextBadge" hidden>登録済み</span>
+            <span class="context-lock" id="contextLock" hidden data-tooltip="KUROKO_MEETING_CONTEXTで固定中">🔒</span>
+          </button>
+        </div>
 
-        <section class="block" id="questionsBlock" hidden>
-          <h2>次に話すべきこと</h2>
-          <ul id="questions"></ul>
-        </section>
+        <main class="content" id="content">
+          <div class="empty" id="empty">
+            会議が始まると、ここに話題の要約・次に話すべきこと・背景知識が表示されます。
+          </div>
 
-        <section class="block" id="webBlock" hidden>
-          <h2>FROM THE WEB</h2>
-          <div id="web"></div>
-        </section>
+          <section class="block topic-block" id="topicBlock" hidden>
+            <h1>
+              <button type="button" id="topicHeader" aria-expanded="true">
+                <span class="collapse-indicator" id="summaryCaret" aria-hidden="true">▼</span>
+                <span id="topic">話題</span>
+              </button>
+            </h1>
+            <p id="discussion"></p>
+          </section>
 
-        <section class="block" id="codeBlock" hidden>
-          <h2>FROM THE CODE</h2>
-          <div id="code"></div>
-        </section>
-      </main>
+          <section class="block" id="questionsBlock" hidden>
+            <h2>次に話すべきこと</h2>
+            <ul id="questions"></ul>
+          </section>
 
-      <div class="chat-row" id="chatRow">
-        <span class="chat-icon" aria-hidden="true">💬</span>
-        <input id="chatInput" class="field-input" type="text"
-          placeholder="依頼や指摘を入力（Enterで送信）…" autocomplete="off" spellcheck="false" />
+          <section class="block" id="webBlock" hidden>
+            <h2>FROM THE WEB</h2>
+            <div id="web"></div>
+          </section>
+
+          <section class="block" id="codeBlock" hidden>
+            <h2>FROM THE CODE</h2>
+            <div id="code"></div>
+          </section>
+        </main>
+
+        <div class="chat-row" id="chatRow">
+          <span class="chat-icon" aria-hidden="true">💬</span>
+          <input id="chatInput" class="field-input" type="text"
+            placeholder="依頼や指摘を入力（Enterで送信）…" autocomplete="off" spellcheck="false" />
+        </div>
+
+        <footer class="footer" id="footer">
+          <span class="footer-status" id="footerStatus"></span>
+          <span class="history-nav" id="historyNav">
+            <span class="history-unseen" id="historyUnseen" hidden>● 新着</span>
+            <button type="button" id="historyListBtn" data-tooltip="要約の流れを一覧 (⌘⇧L)">🕘</button>
+            <!-- disabled中はmouseover等が発火せずdata-tooltipが表示されないが、
+                 履歴が1件のみ/端に到達した状態でツールチップが出ないのは仕様上問題ないため許容している -->
+            <button type="button" id="historyPrevBtn" data-tooltip="前の提案 (⌘⇧←)">◀</button>
+            <span class="history-position" id="historyPosition">0 / 0</span>
+            <button type="button" id="historyNextBtn" data-tooltip="次の提案 (⌘⇧→)">▶</button>
+          </span>
+        </footer>
+
+        <div class="history-overlay" id="historyOverlay" hidden>
+          <header class="history-overlay-head">
+            <span>要約の流れ</span>
+            <button type="button" id="historyOverlayClose" data-tooltip="閉じる (Esc)">✕</button>
+          </header>
+          <div class="history-overlay-list" id="historyOverlayList"></div>
+        </div>
       </div>
-
-      <footer class="footer" id="footer">
-        <span class="footer-status" id="footerStatus"></span>
-        <span class="history-nav" id="historyNav">
-          <span class="history-unseen" id="historyUnseen" hidden>● 新着</span>
-          <!-- disabled中はmouseover等が発火せずdata-tooltipが表示されないが、
-               履歴が1件のみ/端に到達した状態でツールチップが出ないのは仕様上問題ないため許容している -->
-          <button type="button" id="historyPrevBtn" data-tooltip="前の提案 (⌘⇧←)">◀</button>
-          <span class="history-position" id="historyPosition">0 / 0</span>
-          <button type="button" id="historyNextBtn" data-tooltip="次の提案 (⌘⇧→)">▶</button>
-        </span>
-      </footer>
     </div>
     <div class="url-tooltip" id="urlTooltip" hidden></div>
     <div class="web-popover" id="webPopover" hidden></div>
